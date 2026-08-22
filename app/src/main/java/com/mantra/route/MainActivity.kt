@@ -311,10 +311,18 @@ class MainActivity : AppCompatActivity() {
             .append(" · ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append('\n')
         builder.append("Shizuku: ").append(shizukuLine.text).append("\n\n")
 
+        // allRows(), not rows(switchedOff): a report that silently omitted the outputs you had
+        // hidden would be a report that lies by omission, and hiding one is exactly the sort of
+        // thing you would forget having done.
         builder.append("OUTPUTS\n")
-        val rows = router.rows()
+        val off = state.switchedOff
+        val rows = router.allRows()
         if (rows.isEmpty()) builder.append("  (none reported)\n")
-        rows.forEach { builder.append("  ").append(it.label).append("  [").append(it.glyph).append("]\n") }
+        rows.forEach { row ->
+            builder.append("  ").append(row.label).append("  [").append(row.glyph).append("]")
+            if (row.key in off) builder.append("  (hidden)")
+            builder.append('\n')
+        }
 
         builder.append("\nPROBES\n")
         Probe.runAllTitlesOnly().forEach { (id, title, _) ->
