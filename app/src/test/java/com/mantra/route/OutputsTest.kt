@@ -256,3 +256,79 @@ class BlendMathTest {
         assertTrue(Blend.values().count { BlendMath.balanceFor(it) == null } == 1)
     }
 }
+
+/**
+ * The regression suite for the v2 failure.
+ *
+ * Every one of these would have passed in v2 too — the bug was never in the parsing, it was in
+ * asking the remote process a question binder could not answer. What these lock down is the
+ * replacement: that the exit code now travels in the output, and that reading it back is not
+ * fooled by output which happens to contain the token.
+ */
+class ExitMarkerTest {
+
+    @Test
+    fun `wrap appends a line that prints the status`() {
+        assertEquals("id -u\necho __MR_EXIT__\$?", ExitMarker.wrap("id -u"))
+    }
+
+    @Test
+    fun `a clean run yields its output and zero`() {
+        val p = ExitMarker.parse("2000\n__MR_EXIT__0")
+        assertEquals(0, p.code)
+        assertEquals("2000", p.output)
+        assertTrue(p.found)
+    }
+
+    @Test
+    fun `a failed command keeps its non-zero code`() {
+        val p = ExitMarker.parse("cmd: not found\n__MR_EXIT__127")
+        assertEquals(127, p.code)
+        assertEquals("cmd: not found", p.output)
+    }
+
+    /**
+     * The case that matters. `settings list secure` and the swap probe both grep for text that
+     * can contain the token; taking the FIRST match would read a command's own output as its
+     * exit status.
+     */
+    @Test
+    fun `the marker is read from the end when output contains the token`() {
+        val p = ExitMarker.parse("__MR_EXIT__99 appears in a line of output\nreal output\n__MR_EXIT__0")
+        assertEquals(0, p.code)
+        assertTrue(p.output.contains("real output"))
+        assertTrue(p.output.contains("99 appears"))
+    }
+
+    @Test
+    fun `no marker is not the same as exit zero`() {
+        // The v2 shape of failure: the shell died before printing anything. Reporting this as
+        // success is the exact mistake that let nine probes claim a verdict they never had.
+        val p = ExitMarker.parse("half a line of output")
+        assertEquals(false, p.found)
+        assertEquals(-1, p.code)
+        assertEquals("half a line of output", p.output)
+    }
+
+    @Test
+    fun `empty output with a marker is still a real result`() {
+        val p = ExitMarker.parse("__MR_EXIT__0")
+        assertEquals(0, p.code)
+        assertEquals("", p.output)
+        assertTrue(p.found)
+    }
+
+    @Test
+    fun `a marker with garbage after it is a fault, not a code`() {
+        val p = ExitMarker.parse("out\n__MR_EXIT__notanumber")
+        assertEquals(-1, p.code)
+        assertTrue(p.found)
+    }
+
+    @Test
+    fun `trailing newline from the shell does not break the read`() {
+        val p = ExitMarker.parse("2000\n__MR_EXIT__0\n")
+        assertEquals(0, p.code)
+        assertEquals("2000", p.output)
+    }
+}

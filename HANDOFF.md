@@ -137,3 +137,48 @@ mentioning signatures.
 upgrades in place, and from v3 onward Test 4 becomes a real test with something to run it
 against. This is a one-time cost, paid deliberately, to stop the runner minting a fresh debug
 key on every build.
+
+---
+
+## v3 — TEST 2 finally ran, and it failed
+
+**The phone said:** `java.lang.IllegalArgumentException: process hasn't exited`, on every single
+shell probe. Shizuku connected, permission granted, notification drawn correctly with Phone
+speaker and Earpiece — and nine probes all faulting identically.
+
+**Nine identical failures is one bug, not nine.** The shared thing is `Shell.run`.
+
+**Cause.** `ShizukuRemoteProcess` is not a local process. Its `waitFor(long, TimeUnit)` and
+`exitValue()` are binder calls into the Shizuku server. Binder does not carry exception classes;
+it maps a throwable onto a small fixed set of codes. The server raises
+`IllegalThreadStateException`, which is a **subclass of IllegalArgumentException**, so it travels
+as the parent and arrives as a plain `IllegalArgumentException`. The JDK's own timed `waitFor`
+catches `IllegalThreadStateException` specifically — and therefore does not catch it.
+
+Confirmed by reading the constant pool of `ShizukuRemoteProcess.class` from
+`dev.rikka.shizuku:api:13.1.5`: it overrides `waitFor(JLjava/util/concurrent/TimeUnit;)Z` and
+delegates to a remote `waitForTimeout(JLjava/lang/String;)Z`. Not inferred from the message.
+
+**Fix.** Stop asking. The command now carries its own exit code out through stdout
+(`echo __MR_EXIT__$?`), and completion is EOF on the stream rather than a question put to the
+server. No binder call in the path, so there is nothing to flatten.
+
+**What this means for the v2 verdicts: they were never measured.** Mono, balance and the
+MEDIA_ROUTING_CONTROL app-op read "refused" because the shell died, not because the phone said
+no. Every one of them is UNTESTED again until v3 probes.
+
+**Also changed.** `destroyForcibly()` → `destroy()`, because the former routes through
+`exitValue()`. Caught throwables now report their class name as well as their message — the only
+reason v2 was diagnosable at all. And a **Copy the report** button, because the probe screen
+scrolls past the bottom of a screenshot and the detail column is the part that matters.
+
+### Tests
+
+TEST 1: 31 green (12 + 4 + 7 + 8 new). Both new sabotages caught the right cases and only those:
+reading the marker from the front instead of the end broke the token-in-output case; treating a
+missing marker as exit zero broke the "no marker is not the same as exit zero" case.
+
+TEST 2: the fix itself is **not verified**. It is a correct account of a failure that was
+observed and a mechanism that was read out of the library, but no line of the new `Shell.run`
+has run on a phone. If v3 probes still fault, the next thing to read is the exception class,
+which will now be printed in full.

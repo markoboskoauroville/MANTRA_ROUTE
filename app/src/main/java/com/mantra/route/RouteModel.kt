@@ -222,3 +222,45 @@ object BlendMath {
 
     fun clampBalance(value: Float): Float = value.coerceIn(-1.0f, 1.0f)
 }
+
+/**
+ * Reading a shell command's exit code without asking the process for it.
+ *
+ * TEST 2 on the real phone, 22.8.2026: every probe came back
+ * `IllegalArgumentException: process hasn't exited`.
+ *
+ * ShizukuRemoteProcess is not a local process. `waitFor(timeout, unit)` and `exitValue()` are
+ * binder calls to the Shizuku server, and binder does not carry exception classes — it maps a
+ * throwable onto a small fixed set of codes. The server's IllegalThreadStateException is a
+ * *subclass* of IllegalArgumentException, so it travels as the parent and arrives as a plain
+ * IllegalArgumentException. The JDK's own timed waitFor catches IllegalThreadStateException
+ * and therefore does not catch it.
+ *
+ * So this stops asking. The command carries its own exit code out through stdout, and the
+ * process is finished when its stream reaches EOF. No binder call, nothing to flatten.
+ */
+object ExitMarker {
+
+    const val TOKEN = "__MR_EXIT__"
+
+    /** `command` becomes `command` followed by a line printing its status. */
+    fun wrap(command: String): String = command + "\necho " + TOKEN + "${'$'}?"
+
+    data class Parsed(val code: Int, val output: String, val found: Boolean)
+
+    /**
+     * The marker is looked for from the END, because a command may legitimately print
+     * something containing the token — `settings list secure` echoing it back, or the probe
+     * that greps for its own text. The real one is always last.
+     */
+    fun parse(raw: String): Parsed {
+        val lines = raw.split("\n")
+        val index = lines.indexOfLast { it.trim().startsWith(TOKEN) }
+        if (index < 0) {
+            return Parsed(-1, raw.trim(), false)
+        }
+        val code = lines[index].trim().removePrefix(TOKEN).trim().toIntOrNull() ?: -1
+        val output = lines.filterIndexed { i, _ -> i != index }.joinToString("\n").trim()
+        return Parsed(code, output, true)
+    }
+}

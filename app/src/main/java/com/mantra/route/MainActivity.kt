@@ -34,6 +34,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var balanceBar: SeekBar
     private lateinit var balanceLine: TextView
     private lateinit var notifButton: TextView
+    private lateinit var copyButton: TextView
     private lateinit var arrangeRows: LinearLayout
     private lateinit var arrangeReset: TextView
 
@@ -63,6 +64,7 @@ class MainActivity : AppCompatActivity() {
         balanceBar = findViewById(R.id.balance_bar)
         balanceLine = findViewById(R.id.balance_line)
         notifButton = findViewById(R.id.notif_button)
+        copyButton = findViewById(R.id.copy_button)
         arrangeRows = findViewById(R.id.arrange_rows)
         arrangeReset = findViewById(R.id.arrange_reset)
 
@@ -79,6 +81,18 @@ class MainActivity : AppCompatActivity() {
         buildProbeRows(Probe.runAllTitlesOnly())
 
         probeButton.setOnClickListener { probe() }
+
+        // A screenshot of this screen scrolls off the bottom, and the detail column is the part
+        // that matters most when something has gone wrong — the v2 fault was diagnosable only
+        // because the exception class was visible. So the whole thing goes to the clipboard as
+        // text, in one press.
+        copyButton.setOnClickListener {
+            val clipboard = getSystemService(android.content.ClipboardManager::class.java)
+            clipboard.setPrimaryClip(
+                android.content.ClipData.newPlainText("Mantra Route report", report())
+            )
+            copyButton.text = "Copied — paste it anywhere"
+        }
 
         notifButton.setOnClickListener {
             if (needsNotificationPermission()) {
@@ -287,6 +301,31 @@ class MainActivity : AppCompatActivity() {
             PackageManager.PERMISSION_GRANTED
 
     private fun color(id: Int) = ContextCompat.getColor(this, id)
+
+    /** The screen, as plain text. Everything, including the probes that scrolled off. */
+    private fun report(): String {
+        val caps = state.capabilities()
+        val builder = StringBuilder()
+        builder.append("Mantra Route v").append(BuildConfig.VERSION_NAME).append('\n')
+        builder.append("Android ").append(Build.VERSION.SDK_INT)
+            .append(" · ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append('\n')
+        builder.append("Shizuku: ").append(shizukuLine.text).append("\n\n")
+
+        builder.append("OUTPUTS\n")
+        val rows = router.rows()
+        if (rows.isEmpty()) builder.append("  (none reported)\n")
+        rows.forEach { builder.append("  ").append(it.label).append("  [").append(it.glyph).append("]\n") }
+
+        builder.append("\nPROBES\n")
+        Probe.runAllTitlesOnly().forEach { (id, title, _) ->
+            val r = caps.results.firstOrNull { it.id == id }
+            builder.append("  ").append(title).append(": ")
+                .append(r?.verdict?.name ?: "UNTESTED").append('\n')
+            val detail = r?.detail.orEmpty()
+            if (detail.isNotEmpty()) builder.append("      ").append(detail).append('\n')
+        }
+        return builder.toString()
+    }
 
     private fun progressToBalance(progress: Int): Float =
         BlendMath.clampBalance((progress - 100) / 100f)

@@ -53,10 +53,11 @@ object Shell {
      * error any catch block will see, so every call carries a deadline. Without it a probe that
      * hangs looks identical to a probe that is thinking.
      */
-    fun run(command: String, timeoutMs: Long = 5_000): ShellResult {
+    fun run(command: String, timeoutMs: Long = 8_000): ShellResult {
         if (!isRunning()) return ShellResult(false, -1, "", NOT_RUNNING)
         if (!hasPermission()) return ShellResult(false, -1, "", NO_PERMISSION)
 
+        var process: Process? = null
         return try {
             val method = Shizuku::class.java.getDeclaredMethod(
                 "newProcess",
@@ -65,9 +66,9 @@ object Shell {
                 String::class.java,
             )
             method.isAccessible = true
-            val process = method.invoke(
+            process = method.invoke(
                 null,
-                arrayOf("sh", "-c", command),
+                arrayOf("sh", "-c", ExitMarker.wrap(command)),
                 null,
                 null,
             ) as Process
@@ -77,20 +78,42 @@ object Shell {
             val outThread = drain(process.inputStream.bufferedReader(), out)
             val errThread = drain(process.errorStream.bufferedReader(), err)
 
-            val finished = process.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
-            if (!finished) {
-                process.destroyForcibly()
-                outThread.join(500)
-                errThread.join(500)
-                return ShellResult(false, -1, out.toString(), "timed out after ${timeoutMs}ms")
-            }
-            outThread.join(500)
+            // The deadline is on the STREAM, not on the process.
+            //
+            // Nothing here calls waitFor(timeout, unit) or exitValue(). Both are binder calls
+            // into the Shizuku server, and both are what turned every probe on the real phone
+            // into a fault. EOF on stdout is the completion signal instead: it is a property of
+            // the pipe, observed locally, and cannot be flattened by binder.
+            outThread.join(timeoutMs)
+            val timedOut = outThread.isAlive
             errThread.join(500)
 
-            val code = process.exitValue()
-            ShellResult(code == 0, code, out.toString().trim(), err.toString().trim())
+            val parsed = ExitMarker.parse(out.toString())
+
+            when {
+                timedOut -> ShellResult(
+                    false, -1, parsed.output,
+                    "timed out after ${timeoutMs}ms",
+                )
+                // No marker means the shell died before it could print its own status — which
+                // is a different failure from a command that ran and returned non-zero, and
+                // must not be reported as one.
+                !parsed.found -> ShellResult(
+                    false, -1, parsed.output,
+                    err.toString().trim().ifEmpty { "shell produced no exit marker" },
+                )
+                else -> ShellResult(
+                    parsed.code == 0, parsed.code, parsed.output, err.toString().trim(),
+                )
+            }
         } catch (t: Throwable) {
-            ShellResult(false, -1, "", (t.cause ?: t).toString())
+            // Named, not swallowed: the class matters as much as the message. The v2 failure
+            // was legible only because the class name came through.
+            val cause = t.cause ?: t
+            ShellResult(false, -1, "", cause.javaClass.name + ": " + (cause.message ?: "no message"))
+        } finally {
+            // destroy(), never destroyForcibly() — the latter routes through exitValue().
+            runCatching { process?.destroy() }
         }
     }
 
