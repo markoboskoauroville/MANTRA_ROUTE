@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  modules/app-icon.md §2. viewport 108, visible mask 72, SYMBOL BOX 42 centred (33 … 75).
+  Nothing drawn leaves the 42 box, strokes included.
+
+  §4, how many shapes: two. A fork — one stem becoming two paths — and the two destinations
+  it ends at. A third shape was drawn and removed, which is the instruction.
+
+  §5, the pairing: gold #E8B15C on ground #12161E measures 9.38. The cyan-on-amber pairing
+  that looked fine on an artboard and vanished at 48px is not used anywhere here.
+
+  Measured extent: x 33.5 … 74.5, y 35 … 73. Widest 41 against a 72 circle = 0.569.
+  Run tools/icon_check.py to recompute rather than trusting this comment.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:pathData="M33.5,54 H50 M50,54 L68,41 M50,54 L68,67"
+        android:strokeColor="#E8B15C"
+        android:strokeWidth="3.4"
+        android:strokeLineCap="butt"
+        android:strokeLineJoin="round" />
+
+    <path
+        android:fillColor="#E8B15C"
+        android:pathData="M70.5,35a4,4 0 1,1 -0.1,0z M70.5,65a4,4 0 1,1 -0.1,0z" />
+</vector>

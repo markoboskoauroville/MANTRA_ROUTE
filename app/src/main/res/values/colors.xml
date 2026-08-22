@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- modules/design-language.md §3. Measured from the working apps; not preferences. -->
+<resources>
+    <color name="ground">#0B0D10</color>
+    <color name="surface">#141A21</color>
+    <color name="amber">#F59E0B</color>
+    <color name="sand">#F2DDB4</color>
+    <color name="slate">#23303D</color>
+    <color name="slate_ink">#5A6B7C</color>
+    <color name="fault">#EF4444</color>
+    <color name="ic_launcher_background">#12161E</color>
+</resources>

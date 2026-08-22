@@ -1,0 +1,80 @@
+name: build
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish a GitHub release for this version"
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the version
+        id: v
+        run: |
+          V=$(grep '^mantraVersion=' gradle.properties | cut -d= -f2)
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Building v$V"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # No gradle-wrapper.jar is committed, so Gradle is provisioned here instead.
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      # TEST 1. The pure logic, no device, no emulator. If this is red nothing else matters.
+      - name: Test 1 — the mechanism, alone
+        run: gradle :app:testDebugUnitTest --no-daemon
+
+      # modules/app-icon.md §3: arithmetic, not opinion.
+      - name: Icon geometry
+        run: python3 tools/icon_check.py
+
+      - name: Assemble
+        run: gradle :app:assembleDebug --no-daemon
+
+      - name: Name the artefact
+        id: apk
+        run: |
+          FILE=$(find app/build/outputs/apk -name '*.apk' | head -1)
+          echo "path=$FILE" >> "$GITHUB_OUTPUT"
+          echo "Built $FILE"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mantra-route-v${{ steps.v.outputs.version }}
+          path: ${{ steps.apk.outputs.path }}
+
+      - name: Publish release
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=${{ steps.v.outputs.version }}
+          # modules/versioning.md §5: the tag IS the version. Never `latest`.
+          gh release create "v$V" "${{ steps.apk.outputs.path }}" \
+            --title "v$V" --notes "Mantra Route v$V" || \
+          gh release upload "v$V" "${{ steps.apk.outputs.path }}" --clobber
+
+          # §4: only the last two builds stay. This deletes the third-newest and older.
+          # UNTESTED — there has only ever been one release.
+          gh release list --limit 50 --json tagName --jq '.[].tagName' \
+            | grep -E '^v[0-9]+$' | sort -t v -k2 -n -r | tail -n +3 \
+            | while read -r OLD; do
+                echo "deleting $OLD"
+                gh release delete "$OLD" --yes --cleanup-tag
+              done
