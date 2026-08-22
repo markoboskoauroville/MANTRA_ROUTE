@@ -182,3 +182,56 @@ TEST 2: the fix itself is **not verified**. It is a correct account of a failure
 observed and a mechanism that was read out of the library, but no line of the new `Shell.run`
 has run on a phone. If v3 probes still fault, the next thing to read is the exception class,
 which will now be printed in full.
+
+---
+
+## v4 — the shell fix worked, and it exposed a worse bug
+
+v3 on the phone: **Shizuku shell WORKS, uid 2000.** Seven probes returned real verdicts for the
+first time. Nothing Phone (2a), Android 36.
+
+### The probe changed the phone and could not change it back
+
+The report read `master_mono accepted 1, restored to 1` and `master_balance accepted 0.5,
+restored to 0.5`. Those "originals" are the probe's own test values. What happened: on the first
+run the keys were unset, so the restore ran `settings delete secure`; that did not land, the test
+value stuck, and the next run read the stuck value as the user's own setting and wrote it back.
+**Two probe runs and the phone is permanently mono, panned 50% right.**
+
+Cause: the restore was fire-and-forget. It performed the restore and reported "restored to X"
+without ever reading the key again. Every other write in this codebase is verified by read-back;
+the one write that undoes damage to someone's device was not.
+
+Fixed: restore, read back, compare, and return **FAULT** naming the key and both values if it
+did not land. A probe that cannot undo itself is a fault regardless of what it learned.
+
+### The notification was showing a claim, not the phone
+
+`Notifier` painted the Stereo/Mono row from `state.blend` — its own stored value, defaulting to
+Stereo. So it showed Stereo in amber while `master_mono` was actually 1. It now calls
+`router.currentBlend()`, which reads the setting. design-language §14, and the failure it
+describes exactly.
+
+### Two false greens
+
+`cmd media_router` scored WORKS on the strength of "No shell command implementation." — the probe
+only asked whether the service was listed. `cmd audio` scored WORKS on empty help. Both now
+require real help text; a listed service with no commands is ABSENT.
+
+### MEDIA_ROUTING_CONTROL: "default"
+
+Not an error — the op exists on Android 36 and `appops set` silently did nothing. An app-op
+attaches to a permission the package **declares**, and the manifest never declared
+MEDIA_ROUTING_CONTROL. Now declared, and the probe tries `pm grant` as well as `appops set`,
+reporting all three answers separately instead of merging them.
+
+**This is a hypothesis, not a finding.** It is the most likely reason a set returns "default",
+but it has not been tested. If v4 still reports "default", the manifest was not the obstacle.
+
+### Tests
+
+TEST 1: 38 green (12 + 4 + 7 + 8 + 7 new). Sabotages: restoring an unset key by writing the
+literal "null" broke the delete case; accepting any listed service broke the media_router case.
+Each turned exactly one test red.
+
+TEST 4: v3 → v4 is the first upgrade over a same-signed install. Still unproven until it runs.

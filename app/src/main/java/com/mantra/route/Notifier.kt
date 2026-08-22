@@ -82,7 +82,10 @@ object Notifier {
 
         // The blend row. Exactly one is in force, so these behave as a radio: choosing one
         // visibly takes the mark off the last. §6.
-        val blend = state.blend
+        // §14: the object is the truth, the state is a claim about it. Reading state.blend
+        // here is what let the panel show Stereo in amber while master_mono was actually 1.
+        // Ask the system.
+        val blend = router.currentBlend()
         paintBlend(big, R.id.blend_stereo, blend == Blend.STEREO, true)
         paintBlend(big, R.id.blend_mono, blend == Blend.MONO, caps.works(Probe.MONO))
         paintBlend(big, R.id.blend_swap, blend == Blend.SWAPPED, caps.works(Probe.SWAP))

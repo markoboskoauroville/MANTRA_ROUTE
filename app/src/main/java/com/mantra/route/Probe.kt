@@ -126,15 +126,26 @@ object Probe {
         }
         val after = Shell.run("settings get secure $key").out.trim()
 
-        // Put it back exactly as found. "null" is what settings prints for an unset key.
-        if (before == "null" || before.isEmpty()) {
-            Shell.run("settings delete secure $key")
-        } else {
-            Shell.run("settings put secure $key $before")
+        // Put it back, then LOOK. The v3 run on the phone restored nothing and said it had.
+        Shell.run(ShellText.restoreCommand(key, before))
+        val now = Shell.run("settings get secure $key").out.trim()
+        val restored = ShellText.restored(before, now)
+
+        // A probe that changed the device and could not change it back is a fault, whatever it
+        // learned on the way. Saying so beats a WORKS that leaves the phone in mono.
+        if (!restored) {
+            return ProbeResult(
+                id, title, buys, Verdict.FAULT,
+                "COULD NOT RESTORE: $key was '$before', is now '$now'. " +
+                    "Set it back by hand before trusting the audio.",
+            )
         }
 
         return if (matches(after)) {
-            ProbeResult(id, title, buys, Verdict.WORKS, "$key accepted $testValue, restored to $before")
+            ProbeResult(
+                id, title, buys, Verdict.WORKS,
+                "$key accepted $testValue, then restored to '$before' and verified",
+            )
         } else {
             ProbeResult(id, title, buys, Verdict.REFUSED, "$key stayed at '$after' after writing $testValue")
         }
@@ -226,6 +237,10 @@ object Probe {
         if (!Shell.hasPermission() || !Shell.isRunning()) {
             return ProbeResult(id, title, buys, Verdict.UNTESTED, "no shell")
         }
+        // Two doors, because "default" means the op exists and the set did nothing. The
+        // permission is now declared in the manifest, so pm grant has a target; the app-op is
+        // tried either way and both answers are reported rather than merged.
+        val grant = Shell.run("pm grant $packageName android.permission.MEDIA_ROUTING_CONTROL")
         val set = Shell.run("appops set $packageName MEDIA_ROUTING_CONTROL allow")
         val read = Shell.run("appops get $packageName MEDIA_ROUTING_CONTROL")
         val allowed = read.out.contains("allow", ignoreCase = true)
@@ -233,7 +248,10 @@ object Probe {
             allowed -> ProbeResult(id, title, buys, Verdict.WORKS, read.out.trim())
             read.text.contains("no operations", true) || set.text.contains("Unknown operation", true) ->
                 ProbeResult(id, title, buys, Verdict.ABSENT, "this build does not know the op")
-            else -> ProbeResult(id, title, buys, Verdict.REFUSED, (set.text + " " + read.text).trim())
+            else -> ProbeResult(
+                id, title, buys, Verdict.REFUSED,
+                ("op=" + read.text + " | set=" + set.text + " | grant=" + grant.text).trim(),
+            )
         }
     }
 
@@ -273,9 +291,15 @@ object Probe {
         val present = list.out.lineSequence().any { it.trim() == service }
         if (!present) return ProbeResult(id, title, buys, Verdict.ABSENT, "no such service in `cmd -l`")
         val help = Shell.run("cmd $service help")
-        return ProbeResult(
-            id, title, buys, Verdict.WORKS,
-            help.text.lineSequence().take(6).joinToString("\n").ifEmpty { "service present" },
-        )
+        val detail = help.text.lineSequence().take(6).joinToString("\n")
+        return if (ShellText.cmdUsable(help.text)) {
+            ProbeResult(id, title, buys, Verdict.WORKS, detail)
+        } else {
+            ProbeResult(
+                id, title, buys, Verdict.ABSENT,
+                "service is listed but exposes no shell commands" +
+                    if (detail.isEmpty()) "" else ": $detail",
+            )
+        }
     }
 }

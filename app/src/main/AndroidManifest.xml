@@ -12,6 +12,13 @@
 
     <!-- Declared so `pm grant` has something to move. It is signature|privileged and is
          expected to stay ungranted; the probe records the refusal rather than assuming it. -->
+    <!-- The app-op probe came back "default" on Android 36: set silently did nothing. An
+         app-op is attached to a permission the package DECLARES; without this line there was
+         nothing for `appops set` to attach to. Declared so the grant has a target. -->
+    <uses-permission
+        android:name="android.permission.MEDIA_ROUTING_CONTROL"
+        tools:ignore="ProtectedPermissions" />
+
     <uses-permission
         android:name="android.permission.MODIFY_AUDIO_ROUTING"
         tools:ignore="ProtectedPermissions" />

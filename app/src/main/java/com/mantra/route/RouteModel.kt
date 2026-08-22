@@ -264,3 +264,46 @@ object ExitMarker {
         return Parsed(code, output, true)
     }
 }
+
+/**
+ * Shell text handling, pure.
+ *
+ * All of this used to be inline in Probe, where it could not be tested, and one piece of it was
+ * wrong on the real phone: the probe restored a secure setting and then *claimed* it had,
+ * without looking. The claim was false, and the next run read the stuck test value as though it
+ * were the user's own setting and wrote it back as "original". Two runs and mono was permanent.
+ */
+object ShellText {
+
+    private fun unset(value: String): Boolean {
+        val v = value.trim()
+        return v.isEmpty() || v == "null"
+    }
+
+    /** How to put [key] back to the value it held before a probe touched it. */
+    fun restoreCommand(key: String, before: String): String =
+        if (unset(before)) "settings delete secure $key"
+        else "settings put secure $key ${before.trim()}"
+
+    /**
+     * Did the restore actually land? An unset key reads back as "null", so "null" and "" are
+     * the same state and must compare equal — otherwise a correct restore reports as a failure.
+     */
+    fun restored(before: String, now: String): Boolean =
+        if (unset(before)) unset(now) else before.trim() == now.trim()
+
+    /**
+     * A shell service that exists but has no commands is not a capability.
+     *
+     * `cmd media_router` answered "No shell command implementation." on the phone and the probe
+     * scored it WORKS, because the probe only asked whether the service was listed. A green
+     * that means nothing is worse than a red.
+     */
+    fun cmdUsable(help: String): Boolean {
+        val h = help.trim()
+        if (h.isEmpty()) return false
+        if (h.contains("No shell command implementation", ignoreCase = true)) return false
+        if (h.contains("Unknown command", ignoreCase = true)) return false
+        return true
+    }
+}

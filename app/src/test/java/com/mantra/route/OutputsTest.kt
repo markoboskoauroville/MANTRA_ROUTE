@@ -332,3 +332,63 @@ class ExitMarkerTest {
         assertEquals("2000", p.output)
     }
 }
+
+/**
+ * The regression suite for the v3 phone run.
+ *
+ * The probe restored a secure setting and claimed success without looking. On the device the
+ * restore did not land, the test value stuck, and the following run read it back as the user's
+ * own setting — leaving the phone in mono. These lock down the read-back.
+ */
+class ShellTextTest {
+
+    @Test
+    fun `an unset key is restored by deleting it, not by writing the word null`() {
+        // Writing the literal string "null" is how a key that was never set becomes a key set
+        // to nonsense.
+        assertEquals("settings delete secure master_mono", ShellText.restoreCommand("master_mono", "null"))
+        assertEquals("settings delete secure master_mono", ShellText.restoreCommand("master_mono", ""))
+        assertEquals("settings delete secure master_mono", ShellText.restoreCommand("master_mono", "   "))
+    }
+
+    @Test
+    fun `a set key is restored by writing its old value back`() {
+        assertEquals("settings put secure master_mono 1", ShellText.restoreCommand("master_mono", "1"))
+        assertEquals("settings put secure master_balance -0.4", ShellText.restoreCommand("master_balance", " -0.4 "))
+    }
+
+    @Test
+    fun `null and empty are the same state, so that restore is not reported as failed`() {
+        assertTrue(ShellText.restored("null", ""))
+        assertTrue(ShellText.restored("", "null"))
+        assertTrue(ShellText.restored("null", "null"))
+    }
+
+    @Test
+    fun `the exact device failure is caught`() {
+        // master_mono was unset, the probe wrote 1, the delete did not land, it read back 1.
+        assertEquals(false, ShellText.restored("null", "1"))
+        assertEquals(false, ShellText.restored("null", "0.5"))
+    }
+
+    @Test
+    fun `a genuine restore passes`() {
+        assertTrue(ShellText.restored("1", "1"))
+        assertTrue(ShellText.restored("0.5", " 0.5 "))
+        assertEquals(false, ShellText.restored("0", "1"))
+    }
+
+    @Test
+    fun `a service with no shell commands is not a capability`() {
+        // Verbatim from the phone: cmd media_router scored WORKS on this.
+        assertEquals(false, ShellText.cmdUsable("No shell command implementation."))
+        assertEquals(false, ShellText.cmdUsable(""))
+        assertEquals(false, ShellText.cmdUsable("   "))
+        assertEquals(false, ShellText.cmdUsable("Unknown command: help"))
+    }
+
+    @Test
+    fun `a service with real help text is a capability`() {
+        assertTrue(ShellText.cmdUsable("Bluetooth Manager Commands:\n  help or -h\n  enable"))
+    }
+}
