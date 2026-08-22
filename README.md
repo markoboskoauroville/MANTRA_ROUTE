@@ -33,6 +33,7 @@ against the real system and prints what came back:
 | Swap L/R | exchanging the channels — expected absent, and measured rather than assumed |
 | `MODIFY_AUDIO_ROUTING` | direct routing of any app's audio. Expected refused |
 | `MEDIA_ROUTING_CONTROL` app-op | the Android 15 route that might open the door |
+| Notification listener | naming which app is currently playing |
 | `cmd audio` / `cmd media_router` / `cmd bluetooth_manager` | whether these services exist here |
 
 Every probe restores whatever it changed.
@@ -42,9 +43,11 @@ Every probe restores whatever it changed.
 When a row is pressed the app climbs down until something takes:
 
 1. **Audio policy strategy** — only if `MODIFY_AUDIO_ROUTING` probed green. Moves everything.
-2. **Communication routing** — public API, no privilege. Calls and voice apps follow; music may
+2. **Proxy MediaRouter2** — finds every app with a live media session and transfers each one.
+   This is the rung that makes music follow, not just calls. Needs the app-op and the listener.
+3. **Communication routing** — public API, no privilege. Calls and voice apps follow; music may
    not. The app says so instead of pretending.
-3. **The platform's own output picker** — one tap, and it never lies about what it did.
+4. **The platform's own output picker** — one tap, and it never lies about what it did.
 
 ## Swap L/R, honestly
 
@@ -54,6 +57,10 @@ which no non-system app can do. The control is on screen, in slate, refusing —
 shipping as a switch that appears to work.
 
 ## Install
+
+**Uninstall v1 first if you have it** — v1 was debug-signed and v2 is release-signed, so Android
+will refuse the upgrade and call it "app not installed". This is a one-time cost; v2 onward
+upgrades cleanly.
 
 Sideload the APK from Releases. Then: install Shizuku, start it, open Mantra Route, allow
 Shizuku, press **Probe this phone**, then **Show the switcher**.

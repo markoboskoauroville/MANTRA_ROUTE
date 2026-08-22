@@ -42,6 +42,18 @@
             </intent-filter>
         </receiver>
 
+        <!-- Not a listener in any real sense: it reads nothing and overrides nothing. It
+             exists so `cmd notification allow_listener` has a component to allow, which is
+             the only way to learn which app is playing without a privileged permission. -->
+        <service
+            android:name=".RouteListener"
+            android:exported="false"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
         <provider
             android:name="rikka.shizuku.ShizukuProvider"
             android:authorities="${applicationId}.shizuku"

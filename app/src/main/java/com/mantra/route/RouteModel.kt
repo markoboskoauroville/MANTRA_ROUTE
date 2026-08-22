@@ -18,12 +18,22 @@ data class Output(
 
 enum class Glyph { SPEAKER, EARPIECE, WIRED, USB, BLUETOOTH, BLE, HEARING_AID, HDMI, DOCK }
 
-/** One row as the notification will draw it. */
+/**
+ * One row as the notification will draw it.
+ *
+ * [key] is what gets remembered, not [id]. A device id is handed out per connection: unplug
+ * the headphones and plug them back in and the id is different, so a preference stored
+ * against an id is forgotten the first time the thing it names is switched off and on. The
+ * key is made of what does not change.
+ */
 data class Row(
     val id: Int,
+    val typeCode: Int,
     val label: String,
     val glyph: Glyph,
-)
+) {
+    val key: String get() = Outputs.keyOf(typeCode, label)
+}
 
 object AudioType {
     const val EARPIECE = 1
@@ -174,8 +184,23 @@ object Outputs {
                     { it.id },
                 )
             )
-            .map { Row(it.id, labelFor(it.typeCode, it.productName), glyphFor(it.typeCode)) }
+            .map {
+                Row(it.id, it.typeCode, labelFor(it.typeCode, it.productName), glyphFor(it.typeCode))
+            }
     }
+
+    /** Stable across reconnection, and stable across a reboot. */
+    fun keyOf(typeCode: Int, label: String): String = "$typeCode:${label.trim().lowercase()}"
+
+    /**
+     * design-language.md §7: store what is switched OFF, not what is on.
+     *
+     * If the set held what to show, an output type added by a later Android — or a headset
+     * bought next year — would be absent from a saved list that predates it and would never
+     * appear. Holding the exclusions instead means anything new is live by default.
+     */
+    fun visible(rows: List<Row>, switchedOff: Set<String>): List<Row> =
+        rows.filterNot { it.key in switchedOff }
 }
 
 /** Stereo mode, as a closed set. design-language.md §6: exactly one in force, so a radio. */

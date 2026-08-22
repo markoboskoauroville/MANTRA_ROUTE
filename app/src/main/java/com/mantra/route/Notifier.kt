@@ -51,8 +51,10 @@ object Notifier {
         val state = State(context)
         val caps = state.capabilities()
 
-        val rows = router.rows()
-        val active = router.activeId() ?: state.lastSelectedId
+        val rows = router.rows(state.switchedOff)
+        val activeKey = router.activeId()
+            ?.let { id -> rows.firstOrNull { it.id == id }?.key }
+            ?: state.lastSelectedKey
 
         val big = RemoteViews(context.packageName, R.layout.notif_root)
         big.removeAllViews(R.id.rows)
@@ -70,7 +72,7 @@ object Notifier {
             view.setTextViewText(R.id.label, row.label)
             view.setImageViewResource(R.id.glyph, glyphRes(row.glyph))
 
-            val lit = row.id == active
+            val lit = row.key == activeKey
             view.setTextColor(R.id.label, if (lit) AMBER else SAND)
             view.setInt(R.id.glyph, "setColorFilter", if (lit) AMBER else SAND)
 
@@ -102,7 +104,7 @@ object Notifier {
         collapsed.setTextViewText(R.id.title, headline)
         collapsed.setTextViewText(
             R.id.subtitle,
-            rows.firstOrNull { it.id == active }?.label ?: "${rows.size} outputs",
+            rows.firstOrNull { it.key == activeKey }?.label ?: "${rows.size} outputs",
         )
 
         val notification = Notification.Builder(context, CHANNEL_ID)

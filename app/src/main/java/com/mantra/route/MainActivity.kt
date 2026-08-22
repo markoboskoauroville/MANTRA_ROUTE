@@ -4,6 +4,8 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.widget.CheckBox
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
@@ -32,6 +34,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var balanceBar: SeekBar
     private lateinit var balanceLine: TextView
     private lateinit var notifButton: TextView
+    private lateinit var arrangeRows: LinearLayout
+    private lateinit var arrangeReset: TextView
 
     private val askNotifications =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { redraw() }
@@ -59,6 +63,14 @@ class MainActivity : AppCompatActivity() {
         balanceBar = findViewById(R.id.balance_bar)
         balanceLine = findViewById(R.id.balance_line)
         notifButton = findViewById(R.id.notif_button)
+        arrangeRows = findViewById(R.id.arrange_rows)
+        arrangeReset = findViewById(R.id.arrange_reset)
+
+        arrangeReset.setOnClickListener {
+            state.resetArrangement()
+            redraw()
+            Notifier.post(this)
+        }
 
         findViewById<TextView>(R.id.version).text = "v" + BuildConfig.VERSION_NAME
 
@@ -162,7 +174,58 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * §7 again: this list holds every output the phone has ever reported in this session,
+     * ticked or not. Unticking one takes it out of the notification and nothing else.
+     */
+    private fun drawArrangeRows() {
+        val rows = router.allRows()
+        arrangeRows.removeAllViews()
+        if (rows.isEmpty()) {
+            val empty = TextView(this).apply {
+                text = "No outputs reported yet"
+                setTextColor(color(R.color.slate_ink))
+                textSize = 13f
+            }
+            arrangeRows.addView(empty)
+            return
+        }
+        val off = state.switchedOff
+        rows.forEach { row ->
+            val view = layoutInflater.inflate(R.layout.arrange_row, arrangeRows, false)
+            view.findViewById<TextView>(R.id.arrange_label).apply {
+                text = row.label
+                setTextColor(color(if (row.key in off) R.color.slate_ink else R.color.sand))
+            }
+            view.findViewById<ImageView>(R.id.arrange_glyph)
+                .setImageResource(glyphRes(row.glyph))
+            view.findViewById<CheckBox>(R.id.arrange_shown).apply {
+                setOnCheckedChangeListener(null)
+                isChecked = row.key !in off
+                setOnCheckedChangeListener { _, _ ->
+                    state.toggleOff(row.key)
+                    drawArrangeRows()
+                    Notifier.post(this@MainActivity)
+                }
+            }
+            arrangeRows.addView(view)
+        }
+    }
+
+    private fun glyphRes(glyph: Glyph): Int = when (glyph) {
+        Glyph.SPEAKER -> R.drawable.ic_out_speaker
+        Glyph.EARPIECE -> R.drawable.ic_out_earpiece
+        Glyph.WIRED -> R.drawable.ic_out_wired
+        Glyph.USB -> R.drawable.ic_out_usb
+        Glyph.BLUETOOTH -> R.drawable.ic_out_bluetooth
+        Glyph.BLE -> R.drawable.ic_out_ble
+        Glyph.HEARING_AID -> R.drawable.ic_out_hearing
+        Glyph.HDMI -> R.drawable.ic_out_hdmi
+        Glyph.DOCK -> R.drawable.ic_out_dock
+    }
+
     private fun redraw() {
+        drawArrangeRows()
         val caps = state.capabilities()
 
         shizukuLine.text = when {

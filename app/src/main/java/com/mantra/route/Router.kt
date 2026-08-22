@@ -29,7 +29,10 @@ class Router(private val context: Context) {
             )
         }
 
-    fun rows(): List<Row> = Outputs.rows(outputs())
+    fun allRows(): List<Row> = Outputs.rows(outputs())
+
+    /** What the notification draws: everything except what he has switched off. §7 */
+    fun rows(switchedOff: Set<String>): List<Row> = Outputs.visible(allRows(), switchedOff)
 
     /**
      * What is playing where, right now, according to the platform rather than according to us.
@@ -38,6 +41,17 @@ class Router(private val context: Context) {
      * headphones we believe we selected have been unplugged, the row that is lit must be the
      * one actually carrying sound, not the one we last tapped.
      */
+    /**
+     * Re-select whatever was chosen last, if it has just come back.
+     *
+     * Matched on the stable key, not the id, because the id is different every time a headset
+     * reconnects — which is precisely the moment this needs to work.
+     */
+    fun reselect(key: String, caps: Capabilities): Outcome? {
+        val row = allRows().firstOrNull { it.key == key } ?: return null
+        return selectOutput(row.id, caps)
+    }
+
     fun activeId(): Int? {
         val communication = runCatching { audio.communicationDevice?.id }.getOrNull()
         if (communication != null && outputs().any { it.id == communication }) return communication
@@ -57,12 +71,39 @@ class Router(private val context: Context) {
             .firstOrNull { it.id == deviceId }
             ?: return Outcome.Refused("that output is no longer connected")
 
+        val row = allRows().firstOrNull { it.id == deviceId }
+
         // Rung 1 — the real one, if this device ever grants it.
         if (caps.works(Probe.PERM_ROUTING)) {
             preferredDeviceForStrategy(device)?.let { return it }
         }
 
-        // Rung 2 — communication routing. Public API, no privilege, but it governs the call
+        // Rung 2 — move each playing app's own session. This is the one that does what was
+        // actually asked: music follows, not just calls.
+        if (row != null && caps.works(Probe.APPOP_ROUTING)) {
+            val targets = MediaTargets.playing(context)
+            when {
+                targets.isEmpty() && !MediaTargets.listenerEnabled(context) -> Unit
+                targets.isEmpty() -> Unit
+                else -> {
+                    val failures = targets.mapNotNull { pkg ->
+                        ProxyRouter.transfer(context, pkg, row)?.let { "$pkg: $it" }
+                    }
+                    when {
+                        failures.isEmpty() ->
+                            return Outcome.Moved("moved ${targets.size} playing app(s)")
+                        failures.size < targets.size ->
+                            return Outcome.Partial(
+                                "moved some playing apps",
+                                "refused by " + failures.joinToString("; "),
+                            )
+                        else -> Unit  // all refused: fall through, do not report success
+                    }
+                }
+            }
+        }
+
+        // Rung 3 — communication routing. Public API, no privilege, but it governs the call
         // path rather than the media path. It is honest about that rather than claiming more.
         val set = runCatching { audio.setCommunicationDevice(device) }.getOrDefault(false)
         if (set) {

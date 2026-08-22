@@ -36,6 +36,22 @@ jobs:
         with:
           gradle-version: "8.9"
 
+      # The keystore never touches the repository. It arrives as a secret, is written to a
+      # path outside the tree, and is shredded at the end of the job.
+      - name: Restore the keystore
+        id: ks
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "no keystore secret — release will be unsigned"
+            echo "have=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/mantra_route.jks"
+            echo "have=true" >> "$GITHUB_OUTPUT"
+            echo "keystore restored ($(stat -c%s "$RUNNER_TEMP/mantra_route.jks") bytes)"
+          fi
+
       # TEST 1. The pure logic, no device, no emulator. If this is red nothing else matters.
       - name: Test 1 — the mechanism, alone
         run: gradle :app:testDebugUnitTest --no-daemon
@@ -45,7 +61,27 @@ jobs:
         run: python3 tools/icon_check.py
 
       - name: Assemble
-        run: gradle :app:assembleDebug --no-daemon
+        env:
+          MANTRA_KEYSTORE: ${{ steps.ks.outputs.have == 'true' && format('{0}/mantra_route.jks', runner.temp) || '' }}
+          MANTRA_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          MANTRA_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          MANTRA_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ "${{ steps.ks.outputs.have }}" = "true" ]; then
+            gradle :app:assembleRelease --no-daemon
+          else
+            gradle :app:assembleDebug --no-daemon
+          fi
+
+      - name: Confirm it is signed, and by the same key as last time
+        run: |
+          FILE=$(find app/build/outputs/apk -name '*.apk' | head -1)
+          $ANDROID_HOME/build-tools/34.0.0/apksigner verify --print-certs "$FILE" \
+            | grep -i "SHA-256 digest" || echo "UNSIGNED"
+
+      - name: Shred the keystore
+        if: always()
+        run: shred -u "$RUNNER_TEMP/mantra_route.jks" 2>/dev/null || true
 
       - name: Name the artefact
         id: apk

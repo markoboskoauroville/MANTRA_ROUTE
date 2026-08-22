@@ -146,6 +146,81 @@ class OutputsTest {
     }
 }
 
+/**
+ * TEST 1 for the two rules v2 added: the key that survives a reconnection, and storing what is
+ * switched OFF rather than what is on.
+ */
+class ArrangementTest {
+
+    private fun out(id: Int, type: Int, name: String = "", address: String = "") =
+        Output(id, type, name, address)
+
+    @Test
+    fun `the key survives the id changing, which is what happens on every reconnection`() {
+        val first = Outputs.rows(listOf(out(42, AudioType.WIRED_HEADPHONES))).single()
+        val again = Outputs.rows(listOf(out(77, AudioType.WIRED_HEADPHONES))).single()
+        assertTrue(first.id != again.id)
+        assertEquals(first.key, again.key)
+    }
+
+    @Test
+    fun `two different outputs never share a key`() {
+        val rows = Outputs.rows(
+            listOf(
+                out(1, AudioType.SPEAKER),
+                out(2, AudioType.EARPIECE),
+                out(3, AudioType.WIRED_HEADPHONES),
+                out(4, AudioType.BLUETOOTH_A2DP, "Ear", "01"),
+                out(5, AudioType.BLUETOOTH_A2DP, "Speaker", "02"),
+            )
+        )
+        assertEquals(rows.size, rows.map { it.key }.toSet().size)
+    }
+
+    @Test
+    fun `the key does not care about the case the platform reports a name in`() {
+        assertEquals(
+            Outputs.keyOf(AudioType.BLUETOOTH_A2DP, "Nothing Ear"),
+            Outputs.keyOf(AudioType.BLUETOOTH_A2DP, "nothing ear"),
+        )
+    }
+
+    @Test
+    fun `switching one off removes exactly that row`() {
+        val rows = Outputs.rows(
+            listOf(out(1, AudioType.SPEAKER), out(2, AudioType.EARPIECE))
+        )
+        val earpiece = rows.first { it.label == "Earpiece" }
+        val visible = Outputs.visible(rows, setOf(earpiece.key))
+        assertEquals(listOf("Phone speaker"), visible.map { it.label })
+    }
+
+    /**
+     * The whole reason §7 says store the exclusions. If the set held what to SHOW, an output
+     * kind that did not exist when the set was saved would be missing and there would be no
+     * way to discover that it should be there.
+     */
+    @Test
+    fun `an output never seen before is shown, because the set holds exclusions`() {
+        val rows = Outputs.rows(listOf(out(1, AudioType.SPEAKER), out(2, 99, "Future Thing")))
+        val off = setOf(Outputs.keyOf(AudioType.SPEAKER, "Phone speaker"))
+        assertEquals(listOf("Future Thing"), Outputs.visible(rows, off).map { it.label })
+    }
+
+    @Test
+    fun `an empty off-set changes nothing, and a stale key in it changes nothing either`() {
+        val rows = Outputs.rows(listOf(out(1, AudioType.SPEAKER)))
+        assertEquals(rows, Outputs.visible(rows, emptySet()))
+        assertEquals(rows, Outputs.visible(rows, setOf("999:something that is gone")))
+    }
+
+    @Test
+    fun `switching everything off gives an empty list rather than falling back to all`() {
+        val rows = Outputs.rows(listOf(out(1, AudioType.SPEAKER), out(2, AudioType.EARPIECE)))
+        assertEquals(emptyList<Row>(), Outputs.visible(rows, rows.map { it.key }.toSet()))
+    }
+}
+
 class BlendMathTest {
 
     /**

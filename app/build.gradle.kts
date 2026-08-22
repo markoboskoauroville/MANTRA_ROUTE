@@ -18,8 +18,36 @@ android {
         versionName = mantraVersion.toString()
     }
 
+    /**
+     * TEST 4 depends entirely on this.
+     *
+     * Android refuses an install where the signature differs and reports it as "app not
+     * installed", mentioning nothing about signatures. A CI-generated debug key is different
+     * every run, so v1 would not have installed over v2 and the failure would have looked
+     * like a broken package. The keystore lives in GitHub Actions secrets and is restored to
+     * a path passed in by environment; it is never in this repository.
+     */
+    signingConfigs {
+        create("mantra") {
+            val path = System.getenv("MANTRA_KEYSTORE")
+            if (path != null && file(path).exists()) {
+                storeFile = file(path)
+                storePassword = System.getenv("MANTRA_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("MANTRA_KEY_ALIAS")
+                keyPassword = System.getenv("MANTRA_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
-        release { isMinifyEnabled = false }
+        release {
+            isMinifyEnabled = false
+            // Falls back to unsigned when the secret is absent, rather than to a random key
+            // that would silently break upgrades.
+            if (System.getenv("MANTRA_KEYSTORE") != null) {
+                signingConfig = signingConfigs.getByName("mantra")
+            }
+        }
         debug { isMinifyEnabled = false }
     }
 

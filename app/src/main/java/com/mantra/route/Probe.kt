@@ -43,6 +43,7 @@ object Probe {
     const val CMD_AUDIO = "cmd_audio"
     const val CMD_MEDIA_ROUTER = "cmd_media_router"
     const val CMD_BLUETOOTH = "cmd_bluetooth"
+    const val LISTENER = "listener"
 
     /** The whole list, always in this order, always all of them. */
     fun runAll(packageName: String): Capabilities = listOf(
@@ -52,6 +53,7 @@ object Probe {
         swap(),
         permRouting(packageName),
         appopRouting(packageName),
+        listener(packageName),
         cmd(CMD_AUDIO, "cmd audio", "reading and setting audio policy from shell", "audio"),
         cmd(CMD_MEDIA_ROUTER, "cmd media_router", "transferring a route between devices", "media_router"),
         cmd(CMD_BLUETOOTH, "cmd bluetooth_manager", "making a paired device the active one", "bluetooth_manager"),
@@ -71,6 +73,7 @@ object Probe {
         Triple(SWAP, "Swap L / R", "exchanging the two channels"),
         Triple(PERM_ROUTING, "MODIFY_AUDIO_ROUTING", "moving any app's media audio, directly"),
         Triple(APPOP_ROUTING, "MEDIA_ROUTING_CONTROL app-op", "moving another app's audio through MediaRouter2"),
+        Triple(LISTENER, "Notification listener", "naming which app is currently playing"),
         Triple(CMD_AUDIO, "cmd audio", "reading and setting audio policy from shell"),
         Triple(CMD_MEDIA_ROUTER, "cmd media_router", "transferring a route between devices"),
         Triple(CMD_BLUETOOTH, "cmd bluetooth_manager", "making a paired device the active one"),
@@ -231,6 +234,33 @@ object Probe {
             read.text.contains("no operations", true) || set.text.contains("Unknown operation", true) ->
                 ProbeResult(id, title, buys, Verdict.ABSENT, "this build does not know the op")
             else -> ProbeResult(id, title, buys, Verdict.REFUSED, (set.text + " " + read.text).trim())
+        }
+    }
+
+    /**
+     * Being allowed to see the media sessions.
+     *
+     * Without this the proxy router has no package to aim at, so it is useless on its own and
+     * essential alongside the app-op. `cmd notification allow_listener` is the shell path;
+     * the alternative is sending him to a settings screen and hoping.
+     */
+    private fun listener(packageName: String): ProbeResult {
+        val id = LISTENER
+        val title = "Notification listener"
+        val buys = "naming which app is currently playing"
+        if (!Shell.hasPermission() || !Shell.isRunning()) {
+            return ProbeResult(id, title, buys, Verdict.UNTESTED, "no shell")
+        }
+        val component = "$packageName/$packageName.RouteListener"
+        Shell.run("cmd notification allow_listener $component")
+        val enabled = Shell.run("settings get secure enabled_notification_listeners").out
+        return if (enabled.contains(packageName)) {
+            ProbeResult(id, title, buys, Verdict.WORKS, "listener allowed")
+        } else {
+            ProbeResult(
+                id, title, buys, Verdict.REFUSED,
+                "not in enabled_notification_listeners after allow_listener",
+            )
         }
     }
 
