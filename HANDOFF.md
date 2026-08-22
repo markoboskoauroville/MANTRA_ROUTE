@@ -93,3 +93,47 @@ visible rather than arriving as "app not installed".
 
 Uninstall v1, install v2, press **Probe this phone**, send back that screen. Everything after
 this depends on what it says.
+
+---
+
+## v2 — what happened at the end of the build, recorded because it matters
+
+**The first v2 build was red and no v2 existed.** `:app:packageRelease` failed with
+`Get Key failed: Given final block not properly padded` — the classic signature of a
+`KEY_PASSWORD` that does not match the key inside the keystore. Test 1 and the icon check were
+both green in that run; only packaging failed.
+
+**Three signing secrets were overwritten by a later session that did not check first.**
+`KEYSTORE_B64`, `KEYSTORE_PASSWORD` and `KEY_ALIAS` were replaced with a newly generated
+keystore before it was noticed that secrets already existed. GitHub secrets are write-only, so
+the previous values are not recoverable from the repository.
+
+**The damage was nil, and this is why:** the earlier keystore had never successfully signed
+anything. The only build that used it failed at packaging, and no v2 release existed. So no
+installed APK was signed with the lost key, and no upgrade path was broken. `KEY_PASSWORD` was
+then aligned to the new keystore, which is what turned the build green.
+
+**The keystore of record is now:**
+
+```
+SHA-256  88:3F:8C:D3:57:11:65:15:E9:D4:50:AA:7E:A6:1D:5D:4C:72:39:C3:B3:E4:B5:D6:EE:33:BB:7B:CC:A8:59:F0
+alias    mantra
+RSA 4096, valid 30 years
+```
+
+The v2 APK on the release page carries exactly this fingerprint — checked, not assumed.
+
+**If this keystore is lost, the app can never be updated again.** It exists in two places: the
+four GitHub Actions secrets, which cannot be read back, and the copy handed over in the chat
+where v2 was finished. One of those two is not a backup. Put it somewhere it will survive.
+
+### Test 4, and the one time it does not hold
+
+v1 was **debug-signed** by the CI runner. v2 is **release-signed**. Android refuses an install
+where the signature has changed, and reports it as *app not installed* rather than as anything
+mentioning signatures.
+
+**So v1 must be uninstalled once, by hand, before v2 goes on.** Everything from v2 forward
+upgrades in place, and from v3 onward Test 4 becomes a real test with something to run it
+against. This is a one-time cost, paid deliberately, to stop the runner minting a fresh debug
+key on every build.
