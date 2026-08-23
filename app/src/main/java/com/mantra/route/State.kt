@@ -63,6 +63,10 @@ class State(context: Context) {
             editor.putString("$KEY_BUYS${r.id}", r.buys)
         }
         editor.putStringSet(KEY_CAP_IDS, caps.results.map { it.id }.toSet())
+        // Stamp the build. v4 opened showing v3's stored verdicts — including two strings v4
+        // was written to stop producing — because SharedPreferences survive an upgrade and
+        // nothing invalidated them.
+        editor.putInt(KEY_CAP_VERSION, BuildConfig.VERSION_CODE)
         editor.apply()
         lastProbeAt = System.currentTimeMillis()
     }
@@ -75,6 +79,10 @@ class State(context: Context) {
      * launch behaves as though every capability had passed.
      */
     fun capabilities(): Capabilities {
+        // A verdict measured by a different build is a verdict about different code.
+        if (prefs.getInt(KEY_CAP_VERSION, -1) != BuildConfig.VERSION_CODE) {
+            return Capabilities(emptyList())
+        }
         val ids = prefs.getStringSet(KEY_CAP_IDS, emptySet()).orEmpty()
         val results = ids.map { id ->
             ProbeResult(
@@ -97,6 +105,7 @@ class State(context: Context) {
         const val KEY_BALANCE = "balance"
         const val KEY_PROBED_AT = "probed_at"
         const val KEY_CAP_IDS = "cap_ids"
+        const val KEY_CAP_VERSION = "cap_version"
         const val KEY_CAP = "cap_"
         const val KEY_DETAIL = "cap_detail_"
         const val KEY_TITLE = "cap_title_"

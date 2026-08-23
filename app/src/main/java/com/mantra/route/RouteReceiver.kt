@@ -91,6 +91,7 @@ class RouteReceiver : BroadcastReceiver() {
     }
 
     companion object {
+        const val ACTION_PICKER = "com.mantra.route.PICKER"
         const val ACTION_SELECT = "com.mantra.route.SELECT"
         const val ACTION_BLEND = "com.mantra.route.BLEND"
         const val ACTION_REFRESH = "com.mantra.route.REFRESH"

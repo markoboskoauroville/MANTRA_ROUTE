@@ -235,3 +235,51 @@ literal "null" broke the delete case; accepting any listed service broke the med
 Each turned exactly one test red.
 
 TEST 4: v3 → v4 is the first upgrade over a same-signed install. Still unproven until it runs.
+
+---
+
+## v5 — "only colors are changing"
+
+Reported from the phone, 23.8.2026, and correct. Three separate faults, all of them the app
+claiming more than it knew.
+
+### 1. The cache made v4 look like v3
+
+v4 opened showing v3's stored verdicts — including `restored to 1` and
+`cmd media_router: WORKS`, two strings v4 exists to stop producing. SharedPreferences survive an
+upgrade and nothing invalidated them. Verdicts are now stamped with `BuildConfig.VERSION_CODE`
+and a stamp from a different build reads as UNTESTED.
+
+**Any probe output sent before pressing Probe on the new build is evidence about the old one.**
+
+### 2. The amber row was showing the tap, not the sound
+
+`Notifier` lit the row matching `communicationDevice` — the CALL path — and when that was empty
+fell back to `state.lastSelectedKey`, the app's own memory of what was pressed. So tapping
+Earpiece lit Earpiece whether or not anything moved, which is precisely what was observed.
+
+Now: amber requires a routing capability to exist at all, and this phone has none. Nothing is
+lit. The call route is reported in words on the row (`calls here`, `calls only`), not in colour,
+because amber already means "in force" and giving it a second meaning destroys the legend.
+
+### 3. The earpiece was offered as a music destination
+
+It cannot be one. Android routes a call there and nothing else. It now says `calls only`.
+
+### What this phone can actually do, stated plainly
+
+- Mono downmix — **yes**, system-wide
+- Left/right balance — **yes**, system-wide
+- Swap L/R — **no**, and no build setting exists
+- Move calls and voice apps between outputs — **yes**
+- **Move music — no.** MODIFY_AUDIO_ROUTING is signature|privileged. MEDIA_ROUTING_CONTROL
+  reads `default` after both `appops set` and `pm grant`, so the v4 manifest hypothesis was
+  **wrong**: declaring the permission was not the obstacle.
+
+The system output switcher is therefore the only thing on this device that moves music, and it
+is now a permanent row in the panel rather than a consolation prize shown after a failure.
+
+### Tests
+
+TEST 1: 43 green. Sabotages: letting the app claim media moved regardless, and treating the
+earpiece as a music destination — each turned exactly one test red.

@@ -307,3 +307,48 @@ object ShellText {
         return true
     }
 }
+
+/**
+ * What the panel is allowed to claim.
+ *
+ * On the phone, 23.8.2026: "colors are changing, buttons are working, but in actual reality
+ * audio is coming through whatever OS choose to do." Exactly right, and the colour was the
+ * bug. The amber row was painted from the COMMUNICATION route — the call path — and when that
+ * was empty it fell back to whatever the user last tapped. Either way it showed a tap, not a
+ * fact.
+ */
+object Claim {
+
+    /**
+     * Media routing needs a privilege this phone has refused. Without it the app can move the
+     * call path and nothing else, and must say so in those words.
+     */
+    fun canMoveMedia(routingWorks: Boolean): Boolean = routingWorks
+
+    fun headline(shellRunning: Boolean, shellAllowed: Boolean, routingWorks: Boolean): String = when {
+        !shellRunning -> "Shizuku is not running"
+        !shellAllowed -> "Shizuku has not been allowed"
+        routingWorks -> "Routing media"
+        else -> "Calls only — media follows the system"
+    }
+
+    /**
+     * An earpiece is not a place music can go. Android will route a call there and nothing
+     * else, so a row offering it as a music destination is an offer that cannot be honoured.
+     */
+    fun carriesMedia(typeCode: Int): Boolean = when (typeCode) {
+        AudioType.EARPIECE, AudioType.TELEPHONY -> false
+        else -> true
+    }
+
+    /**
+     * The suffix on a row. Not a colour: the palette already spends amber on "in force", and
+     * inventing a second meaning for it is how a legend stops being readable.
+     */
+    fun annotation(carriesMedia: Boolean, holdsCallRoute: Boolean): String = when {
+        !carriesMedia && holdsCallRoute -> "  calls only, in use"
+        !carriesMedia -> "  calls only"
+        holdsCallRoute -> "  calls here"
+        else -> ""
+    }
+}

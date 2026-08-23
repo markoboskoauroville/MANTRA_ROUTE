@@ -392,3 +392,64 @@ class ShellTextTest {
         assertTrue(ShellText.cmdUsable("Bluetooth Manager Commands:\n  help or -h\n  enable"))
     }
 }
+
+/**
+ * The regression suite for "only colors are changing".
+ *
+ * Reported from the phone, 23.8.2026. The panel lit the row that was tapped, from the call
+ * route or, failing that, from the app's own memory of the tap. Neither is evidence about
+ * where music is playing.
+ */
+class ClaimTest {
+
+    @Test
+    fun `amber is not available when no routing capability exists`() {
+        // The whole bug in one line: without a routing privilege the app cannot claim media
+        // has moved, no matter what the user tapped.
+        assertEquals(false, Claim.canMoveMedia(routingWorks = false))
+        assertTrue(Claim.canMoveMedia(routingWorks = true))
+    }
+
+    @Test
+    fun `the headline says calls only rather than something vague`() {
+        assertEquals(
+            "Calls only — media follows the system",
+            Claim.headline(shellRunning = true, shellAllowed = true, routingWorks = false),
+        )
+        assertEquals(
+            "Routing media",
+            Claim.headline(shellRunning = true, shellAllowed = true, routingWorks = true),
+        )
+    }
+
+    @Test
+    fun `shizuku problems outrank routing in the headline`() {
+        // If the shell is down, saying "calls only" hides the actual reason and sends you
+        // looking in the wrong place.
+        assertEquals(
+            "Shizuku is not running",
+            Claim.headline(shellRunning = false, shellAllowed = true, routingWorks = false),
+        )
+        assertEquals(
+            "Shizuku has not been allowed",
+            Claim.headline(shellRunning = true, shellAllowed = false, routingWorks = true),
+        )
+    }
+
+    @Test
+    fun `an earpiece is never a music destination`() {
+        assertEquals(false, Claim.carriesMedia(AudioType.EARPIECE))
+        assertEquals(false, Claim.carriesMedia(AudioType.TELEPHONY))
+        assertTrue(Claim.carriesMedia(AudioType.SPEAKER))
+        assertTrue(Claim.carriesMedia(AudioType.BLUETOOTH_A2DP))
+        assertTrue(Claim.carriesMedia(AudioType.WIRED_HEADPHONES))
+    }
+
+    @Test
+    fun `a row that cannot carry music says so, in words not colour`() {
+        assertEquals("  calls only", Claim.annotation(carriesMedia = false, holdsCallRoute = false))
+        assertEquals("  calls only, in use", Claim.annotation(carriesMedia = false, holdsCallRoute = true))
+        assertEquals("  calls here", Claim.annotation(carriesMedia = true, holdsCallRoute = true))
+        assertEquals("", Claim.annotation(carriesMedia = true, holdsCallRoute = false))
+    }
+}

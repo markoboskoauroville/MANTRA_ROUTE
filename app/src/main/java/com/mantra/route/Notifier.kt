@@ -52,9 +52,12 @@ object Notifier {
         val caps = state.capabilities()
 
         val rows = router.rows(state.switchedOff)
-        val activeKey = router.activeId()
+        // NO fallback to state.lastSelectedKey. That fallback is what lit the row you tapped
+        // whether or not anything moved. If the platform will not confirm a route, nothing is
+        // lit, and the panel says so in the headline instead of implying it in colour.
+        val callRouteKey = router.activeId()
             ?.let { id -> rows.firstOrNull { it.id == id }?.key }
-            ?: state.lastSelectedKey
+        val routingWorks = caps.anyRouting
 
         val big = RemoteViews(context.packageName, R.layout.notif_root)
         big.removeAllViews(R.id.rows)
@@ -69,16 +72,34 @@ object Notifier {
 
         rows.forEach { row ->
             val view = RemoteViews(context.packageName, R.layout.notif_row)
-            view.setTextViewText(R.id.label, row.label)
+            val holdsCall = row.key == callRouteKey
+            val carries = Claim.carriesMedia(row.typeCode)
+            view.setTextViewText(
+                R.id.label,
+                row.label + Claim.annotation(carries, holdsCall),
+            )
             view.setImageViewResource(R.id.glyph, glyphRes(row.glyph))
 
-            val lit = row.key == activeKey
+            // Amber means "media is here", and that claim is only available when a routing
+            // capability exists. The call route is reported in words on the row instead.
+            val lit = routingWorks && holdsCall
             view.setTextColor(R.id.label, if (lit) AMBER else SAND)
             view.setInt(R.id.glyph, "setColorFilter", if (lit) AMBER else SAND)
 
             view.setOnClickPendingIntent(R.id.row_root, selectIntent(context, row.id))
             big.addView(R.id.rows, view)
         }
+
+        // The escape hatch, promoted to a permanent row rather than a consolation prize shown
+        // only after a failure. On a phone that refuses MODIFY_AUDIO_ROUTING this is the ONLY
+        // control here that moves music, so it belongs in the list, not hidden behind an error.
+        val picker = RemoteViews(context.packageName, R.layout.notif_row)
+        picker.setTextViewText(R.id.label, "System output switcher…")
+        picker.setImageViewResource(R.id.glyph, R.drawable.ic_out_cast)
+        picker.setTextColor(R.id.label, SAND)
+        picker.setInt(R.id.glyph, "setColorFilter", SAND)
+        picker.setOnClickPendingIntent(R.id.row_root, pickerIntent(context))
+        big.addView(R.id.rows, picker)
 
         // The blend row. Exactly one is in force, so these behave as a radio: choosing one
         // visibly takes the mark off the last. §6.
@@ -94,12 +115,7 @@ object Notifier {
         big.setOnClickPendingIntent(R.id.blend_mono, blendIntent(context, Blend.MONO))
         big.setOnClickPendingIntent(R.id.blend_swap, blendIntent(context, Blend.SWAPPED))
 
-        val headline = when {
-            !Shell.isRunning() -> "Shizuku is not running"
-            !Shell.hasPermission() -> "Shizuku has not been allowed"
-            caps.anyRouting -> "Routing"
-            else -> "Limited routing"
-        }
+        val headline = Claim.headline(Shell.isRunning(), Shell.hasPermission(), routingWorks)
         big.setTextViewText(R.id.title, headline)
         big.setTextColor(R.id.title, if (caps.anyRouting) SAND else SLATE)
 
@@ -107,7 +123,8 @@ object Notifier {
         collapsed.setTextViewText(R.id.title, headline)
         collapsed.setTextViewText(
             R.id.subtitle,
-            rows.firstOrNull { it.key == activeKey }?.label ?: "${rows.size} outputs",
+            if (routingWorks) rows.firstOrNull { it.key == callRouteKey }?.label.orEmpty()
+            else "${rows.size} outputs · tap to open the system switcher",
         )
 
         val notification = Notification.Builder(context, CHANNEL_ID)
@@ -149,6 +166,14 @@ object Notifier {
         Glyph.HDMI -> R.drawable.ic_out_hdmi
         Glyph.DOCK -> R.drawable.ic_out_dock
     }
+
+    private fun pickerIntent(context: Context): PendingIntent =
+        PendingIntent.getBroadcast(
+            context,
+            3000,
+            Intent(context, RouteReceiver::class.java).setAction(RouteReceiver.ACTION_PICKER),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
 
     private fun selectIntent(context: Context, deviceId: Int): PendingIntent =
         PendingIntent.getBroadcast(
