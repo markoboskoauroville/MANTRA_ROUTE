@@ -119,13 +119,54 @@ object Notifier {
         big.setTextViewText(R.id.title, headline)
         big.setTextColor(R.id.title, if (caps.anyRouting) SAND else SLATE)
 
+        // The collapsed view: every action in one row, no title.
+        //
+        // There is NO Android API to force a notification to open expanded — the platform owns
+        // that and remembers what the user last did. So rather than pretend, the collapsed row
+        // is made complete enough that expanding is optional.
         val collapsed = RemoteViews(context.packageName, R.layout.notif_collapsed)
-        collapsed.setTextViewText(R.id.title, headline)
-        collapsed.setTextViewText(
-            R.id.subtitle,
-            if (routingWorks) rows.firstOrNull { it.key == callRouteKey }?.label.orEmpty()
-            else "${rows.size} outputs · tap to open the system switcher",
+        collapsed.removeAllViews(R.id.chips)
+
+        rows.forEach { row ->
+            val chip = RemoteViews(context.packageName, R.layout.notif_chip)
+            val carries = Claim.carriesMedia(row.typeCode)
+            chip.setTextViewText(R.id.chip, Chip.short(row.label))
+            chip.setTextColor(
+                R.id.chip,
+                when {
+                    routingWorks && row.key == callRouteKey -> AMBER
+                    carries -> SAND
+                    else -> SLATE
+                },
+            )
+            chip.setOnClickPendingIntent(R.id.chip, selectIntent(context, row.id))
+            collapsed.addView(R.id.chips, chip)
+        }
+
+        val stereoChip = RemoteViews(context.packageName, R.layout.notif_chip)
+        stereoChip.setTextViewText(R.id.chip, "Stereo")
+        stereoChip.setTextColor(R.id.chip, if (blend == Blend.STEREO) AMBER else SAND)
+        stereoChip.setOnClickPendingIntent(R.id.chip, blendIntent(context, Blend.STEREO))
+        collapsed.addView(R.id.chips, stereoChip)
+
+        val monoChip = RemoteViews(context.packageName, R.layout.notif_chip)
+        monoChip.setTextViewText(R.id.chip, "Mono")
+        monoChip.setTextColor(
+            R.id.chip,
+            when {
+                !caps.works(Probe.MONO) -> SLATE
+                blend == Blend.MONO -> AMBER
+                else -> SAND
+            },
         )
+        monoChip.setOnClickPendingIntent(R.id.chip, blendIntent(context, Blend.MONO))
+        collapsed.addView(R.id.chips, monoChip)
+
+        val pickerChip = RemoteViews(context.packageName, R.layout.notif_chip)
+        pickerChip.setTextViewText(R.id.chip, "Switcher")
+        pickerChip.setTextColor(R.id.chip, SAND)
+        pickerChip.setOnClickPendingIntent(R.id.chip, pickerIntent(context))
+        collapsed.addView(R.id.chips, pickerChip)
 
         val notification = Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)

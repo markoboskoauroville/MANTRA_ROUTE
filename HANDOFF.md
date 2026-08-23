@@ -283,3 +283,45 @@ is now a permanent row in the panel rather than a consolation prize shown after 
 
 TEST 1: 43 green. Sabotages: letting the app claim media moved regardless, and treating the
 earpiece as a music destination — each turned exactly one test red.
+
+---
+
+## v6 — the app-op WORKS, and the UI was wrong
+
+### MEDIA_ROUTING_CONTROL: allow
+
+Reported from the phone on v5. **The v4 manifest hypothesis was correct.** It was declared wrong
+in conversation only because v4's cached verdicts were being read as v5's — the same stale-cache
+trap the version stamp now closes. `caps.anyRouting` is true, and Rung 2 (the MediaRouter2 proxy)
+is live for the first time.
+
+### Why there is still no switching, and it is not the code
+
+`OUTPUTS` lists **Phone speaker** and **Earpiece**. Nothing else. Bluetooth is off in every
+screenshot and nothing is plugged in. An earpiece cannot carry media, so the phone currently has
+exactly ONE media destination.
+
+**There is nothing to switch to.** No routing implementation, however correct, can demonstrate
+anything against a single destination. Rung 2 additionally needs a live media session to move;
+with nothing playing, `MediaTargets.playing()` is empty and the rung is skipped.
+
+The proxy rung is therefore still **UNTESTED**, not failed. It has never had a target.
+
+### The window drew under the system bars
+
+Android 15 made edge-to-edge mandatory for `targetSdk` 35 and up. The window runs under the
+status bar and navigation bar, and `activity_main.xml` never consumed the insets — so the title
+sat behind the clock and the footer behind the nav buttons. Now padded from
+`systemBars() or displayCutout()`, with `clipToPadding=false` so content still scrolls under.
+
+### The collapsed notification spent its whole height on a word
+
+Replaced with one row of chips: every output, Stereo, Mono, Switcher — all tappable without
+expanding. Labels shortened by rule (whole first word before truncation, §10).
+
+**Always-expanded is not possible.** Android has no API for it; the platform owns expansion state
+and remembers what the user last did. The collapsed row is made complete instead of pretending.
+
+### Tests
+
+TEST 1: 48 green.

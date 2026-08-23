@@ -352,3 +352,25 @@ object Claim {
         else -> ""
     }
 }
+
+/**
+ * Fitting the whole control set into one collapsed notification row.
+ *
+ * The collapsed view is capped by the platform at roughly 64dp, so the labels have to be short
+ * enough that a row of them does not wrap or clip. §10 still applies: shorten by RULE and let
+ * the row size itself, never by giving each chip a fixed fraction of the width.
+ */
+object Chip {
+
+    /**
+     * "Wired headphones" is not going to fit beside four other chips, and "Wired headphon…" is
+     * worse than "Wired". Prefer a whole first word over a truncated phrase.
+     */
+    fun short(label: String, limit: Int = 10): String {
+        val clean = label.trim()
+        if (clean.length <= limit) return clean
+        val firstWord = clean.substringBefore(' ')
+        if (firstWord.length <= limit && firstWord.isNotEmpty()) return firstWord
+        return clean.take(limit - 1).trimEnd() + "…"
+    }
+}

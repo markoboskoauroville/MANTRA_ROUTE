@@ -453,3 +453,37 @@ class ClaimTest {
         assertEquals("", Claim.annotation(carriesMedia = true, holdsCallRoute = false))
     }
 }
+
+/** Chip labels for the one-row collapsed panel. */
+class ChipTest {
+
+    @Test
+    fun `a short label is left alone`() {
+        assertEquals("Earpiece", Chip.short("Earpiece"))
+        assertEquals("Mono", Chip.short("Mono"))
+    }
+
+    @Test
+    fun `a long label falls back to its first whole word, not a truncation`() {
+        // "Wired headphones" -> "Wired", never "Wired hea…". §10: shorten by rule.
+        assertEquals("Wired", Chip.short("Wired headphones"))
+        assertEquals("Phone", Chip.short("Phone speaker"))
+    }
+
+    @Test
+    fun `a long single word is truncated with an ellipsis as the last resort`() {
+        assertEquals("Supercali…", Chip.short("Supercalifragilistic"))
+    }
+
+    @Test
+    fun `the boundary is inclusive at both ends`() {
+        assertEquals("1234567890", Chip.short("1234567890"))
+        assertEquals("Ab", Chip.short("Ab cdefghijklmno"))
+    }
+
+    @Test
+    fun `an empty label does not crash or produce a bare ellipsis`() {
+        assertEquals("", Chip.short(""))
+        assertEquals("", Chip.short("   "))
+    }
+}

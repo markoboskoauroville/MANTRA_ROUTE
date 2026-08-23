@@ -54,6 +54,22 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // Android 15 (API 35) made edge-to-edge mandatory for apps targeting 35+. The window
+        // now runs under the status bar and the navigation bar, and a layout that does not
+        // consume the insets draws behind the clock and behind the nav buttons — which is
+        // exactly what happened. Pad the scrolling content by the system bar insets, and keep
+        // clipToPadding off so the content still scrolls under them rather than being boxed in.
+        val root = findViewById<android.view.View>(R.id.root_scroll)
+        val basePadding = root.paddingTop
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+            val bars = insets.getInsets(
+                androidx.core.view.WindowInsetsCompat.Type.systemBars() or
+                    androidx.core.view.WindowInsetsCompat.Type.displayCutout()
+            )
+            view.setPadding(bars.left, bars.top + basePadding, bars.right, bars.bottom + basePadding)
+            insets
+        }
+
         state = State(this)
         router = Router(this)
         watcher = OutputWatcher(this)

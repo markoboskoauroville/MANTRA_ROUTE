@@ -1,24 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  One row, every action, no title.
+  The title was spending the whole collapsed view on a word. The chips go here instead, so the
+  panel is usable without expanding it.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:padding="10dp">
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingTop="6dp"
+    android:paddingBottom="6dp">
 
-    <TextView
-        android:id="@+id/title"
+    <LinearLayout
+        android:id="@+id/chips"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textColor="@color/sand"
-        android:textSize="15sp"
-        android:maxLines="1" />
-
-    <TextView
-        android:id="@+id/subtitle"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textColor="@color/amber"
-        android:textSize="13sp"
-        android:maxLines="1"
-        android:ellipsize="end" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical" />
 </LinearLayout>
