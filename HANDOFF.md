@@ -362,3 +362,53 @@ call-audio readout from a real device first.
 
 TEST 1: 48 green. None of them cover this — the fault was a missing counterpart to a call that
 worked, which is a shape unit tests over pure logic cannot see.
+
+---
+
+## v8 — the patch bay
+
+Asked for on 23.8.2026 in the language of an X32: sources down the side, destinations across the
+top, press a crosspoint to connect. It is a better model than the button list it replaces, and
+not only because it is familiar.
+
+**A crosspoint grid has somewhere to put the fact that a connection is impossible.** A button
+does not — a button either works or disappoints, and for eight versions this app was a list of
+buttons that mostly disappointed. A blocked crosspoint is information.
+
+### Two rows, because Android has two paths
+
+`Media` and `Calls` are independent in the platform, and conflating them is what made this app
+confusing from v1. Calls have never needed a privilege — `setCommunicationDevice` is a normal
+API and has worked the whole time. Media needs one this phone refuses. Same list of
+destinations, completely different answer, and the grid shows both at once.
+
+### What the grid says on this phone today
+
+|  | Phone speaker | Earpiece |
+|---|---|---|
+| **Media** | · not possible | · not possible |
+| **Calls** | ○ free | ● patched |
+
+The Media row's blocked cells are not a failure to implement something. `Media → Earpiece` is
+blocked permanently — Android does not route music there, and offering it was this app's
+longest-standing lie. `Media → Speaker` is blocked because no routing privilege was measured.
+
+### Three marks, not three colours
+
+`●` patched, `○` free, `·` not possible. Colour reinforces but does not carry — a test asserts
+the three marks are distinct, so a colour-blind reading still works. §3 says colour is the state
+channel; it does not say colour should be the only one.
+
+A blocked cell is still tappable and explains itself rather than doing nothing silently.
+
+### Tests
+
+TEST 1: 54 green. Sabotages: allowing media to patch to the earpiece, and giving CONNECTED and
+CONNECTABLE the same mark — each turned exactly one test red.
+
+### Still open
+
+The Media row cannot be exercised until a second media-capable output exists on the device. The
+grid will show `○` in the Media row the moment headphones are connected AND a routing capability
+is measured; if it shows `·` with headphones connected, the proxy rung is genuinely unavailable
+and the capture-and-replay fork is the remaining option.

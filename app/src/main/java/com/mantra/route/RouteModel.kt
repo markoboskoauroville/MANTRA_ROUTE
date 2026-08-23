@@ -374,3 +374,85 @@ object Chip {
         return clean.take(limit - 1).trimEnd() + "…"
     }
 }
+
+/**
+ * The patch bay.
+ *
+ * Asked for on 23.8.2026, in the language of an X32: sources down one side, destinations across
+ * the top, and a crosspoint you press to connect. It is the right model, and not only because
+ * it is familiar — a crosspoint grid has somewhere to PUT the fact that a connection is
+ * impossible. Buttons do not. A button either works or disappoints; a blocked crosspoint is
+ * information.
+ *
+ * Android has two independent routing paths, and conflating them is what made this app confusing
+ * for six versions. They are separate rows here because they are separate in the platform.
+ */
+enum class Path { MEDIA, CALL }
+
+enum class Cell {
+    /** Carrying this path right now. */
+    CONNECTED,
+
+    /** Can be patched. */
+    CONNECTABLE,
+
+    /** Cannot be patched on this phone, ever, and the grid says so rather than failing later. */
+    BLOCKED,
+}
+
+object PatchBay {
+
+    /**
+     * Which outputs the platform will accept for a CALL. Deliberately broad: the phone decides,
+     * and this only excludes the ones that are never offered.
+     */
+    fun carriesCall(typeCode: Int): Boolean = when (typeCode) {
+        AudioType.HDMI, AudioType.HDMI_ARC, AudioType.HDMI_EARC,
+        AudioType.DOCK, AudioType.DOCK_ANALOG,
+        AudioType.TELEPHONY, AudioType.REMOTE_SUBMIX -> false
+        else -> true
+    }
+
+    /**
+     * The whole rule for one crosspoint.
+     *
+     * MEDIA to an earpiece is BLOCKED and always will be — Android does not route music there,
+     * and offering it was this app's longest-standing lie. MEDIA anywhere else is blocked too
+     * unless a real routing capability was measured, because without one the app cannot move
+     * music no matter which cell is pressed.
+     */
+    fun cell(
+        path: Path,
+        typeCode: Int,
+        routingWorks: Boolean,
+        isCurrent: Boolean,
+    ): Cell = when (path) {
+        Path.CALL ->
+            if (!carriesCall(typeCode)) Cell.BLOCKED
+            else if (isCurrent) Cell.CONNECTED
+            else Cell.CONNECTABLE
+
+        Path.MEDIA ->
+            if (!Claim.carriesMedia(typeCode)) Cell.BLOCKED
+            else if (!routingWorks) Cell.BLOCKED
+            else if (isCurrent) Cell.CONNECTED
+            else Cell.CONNECTABLE
+    }
+
+    /** The mark drawn in the cell. §3: the shape carries it, colour reinforces it. */
+    fun mark(cell: Cell): String = when (cell) {
+        Cell.CONNECTED -> "\u25CF"     // filled dot: patched
+        Cell.CONNECTABLE -> "\u25CB"   // open dot: free crosspoint
+        Cell.BLOCKED -> "\u00B7"       // middle dot: no such connection
+    }
+
+    /**
+     * One line explaining why a row can go nowhere, so the grid is not a wall of dots with no
+     * account of itself.
+     */
+    fun why(path: Path, routingWorks: Boolean): String = when {
+        path == Path.CALL -> "calls follow this app"
+        routingWorks -> "media follows this app"
+        else -> "media cannot be moved on this phone — use the system switcher"
+    }
+}

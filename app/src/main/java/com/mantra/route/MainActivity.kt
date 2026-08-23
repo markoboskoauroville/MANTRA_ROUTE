@@ -37,6 +37,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var copyButton: TextView
     private lateinit var releaseButton: TextView
     private lateinit var callAudioLine: TextView
+    private lateinit var patchHeaders: LinearLayout
+    private lateinit var patchRows: LinearLayout
+    private lateinit var patchLegend: TextView
     private lateinit var arrangeRows: LinearLayout
     private lateinit var arrangeReset: TextView
 
@@ -85,6 +88,9 @@ class MainActivity : AppCompatActivity() {
         copyButton = findViewById(R.id.copy_button)
         releaseButton = findViewById(R.id.release_button)
         callAudioLine = findViewById(R.id.call_audio_line)
+        patchHeaders = findViewById(R.id.patch_headers)
+        patchRows = findViewById(R.id.patch_rows)
+        patchLegend = findViewById(R.id.patch_legend)
         arrangeRows = findViewById(R.id.arrange_rows)
         arrangeReset = findViewById(R.id.arrange_reset)
 
@@ -326,6 +332,7 @@ class MainActivity : AppCompatActivity() {
         balanceLine.setTextColor(color(if (balanceUsable) R.color.sand else R.color.slate_ink))
 
         callAudioLine.text = router.callAudioReport()
+        drawPatchBay()
 
         notifButton.text =
             if (needsNotificationPermission()) "Allow notifications" else "Show the switcher"
@@ -337,6 +344,87 @@ class MainActivity : AppCompatActivity() {
             PackageManager.PERMISSION_GRANTED
 
     private fun color(id: Int) = ContextCompat.getColor(this, id)
+
+    /**
+     * Draw the crosspoint grid.
+     *
+     * Rebuilt on every redraw because the destination COLUMNS change when a headset connects —
+     * this is a different case from §1's "nothing appears": the grid's shape is the data. What
+     * §1 forbids is a control that vanishes; a blocked crosspoint stays drawn and stays dim.
+     */
+    private fun drawPatchBay() {
+        val caps = state.capabilities()
+        val routingWorks = caps.anyRouting
+        val rows = router.allRows()
+        val callKey = router.activeId()?.let { id -> rows.firstOrNull { it.id == id }?.key }
+
+        patchHeaders.removeAllViews()
+        rows.forEach { row ->
+            val header = layoutInflater.inflate(R.layout.patch_cell, patchHeaders, false) as TextView
+            header.text = Chip.short(row.label, 7)
+            header.textSize = 11f
+            header.setTextColor(color(R.color.slate_ink))
+            patchHeaders.addView(header)
+        }
+
+        patchRows.removeAllViews()
+        listOf(Path.MEDIA to "Media", Path.CALL to "Calls").forEach { (path, name) ->
+            val rowView = layoutInflater.inflate(R.layout.patch_row, patchRows, false)
+            rowView.findViewById<TextView>(R.id.path_label).text = name
+            rowView.findViewById<TextView>(R.id.path_why).text = PatchBay.why(path, routingWorks)
+            val cells = rowView.findViewById<LinearLayout>(R.id.cells)
+
+            rows.forEach { row ->
+                val isCurrent = when (path) {
+                    Path.CALL -> row.key == callKey
+                    Path.MEDIA -> routingWorks && row.key == state.lastSelectedKey
+                }
+                val cell = PatchBay.cell(path, row.typeCode, routingWorks, isCurrent)
+                val view = layoutInflater.inflate(R.layout.patch_cell, cells, false) as TextView
+                view.text = PatchBay.mark(cell)
+                view.setTextColor(
+                    color(
+                        when (cell) {
+                            Cell.CONNECTED -> R.color.amber
+                            Cell.CONNECTABLE -> R.color.sand
+                            Cell.BLOCKED -> R.color.slate_ink
+                        }
+                    )
+                )
+                if (cell != Cell.BLOCKED) {
+                    view.setOnClickListener { patch(path, row) }
+                } else {
+                    // Still tappable, but it explains itself instead of doing nothing silently.
+                    view.setOnClickListener {
+                        patchLegend.text = if (path == Path.MEDIA && !Claim.carriesMedia(row.typeCode)) {
+                            "${row.label} cannot carry music — Android routes only calls there"
+                        } else {
+                            "no routing privilege on this phone, so media cannot be patched"
+                        }
+                    }
+                }
+                cells.addView(view)
+            }
+            patchRows.addView(rowView)
+        }
+
+        patchLegend.text = "●  patched     ○  free     ·  not possible"
+    }
+
+    private fun patch(path: Path, row: Row) {
+        val outcome = when (path) {
+            Path.CALL -> router.selectOutput(row.id, state.capabilities())
+            Path.MEDIA -> router.selectOutput(row.id, state.capabilities())
+        }
+        patchLegend.text = when (outcome) {
+            is Router.Outcome.Moved -> "${row.label}: ${outcome.how}"
+            is Router.Outcome.Partial -> "${row.label}: ${outcome.caveat}"
+            is Router.Outcome.Refused -> "${row.label}: ${outcome.why}"
+        }
+        if (outcome !is Router.Outcome.Refused) state.lastSelectedKey = row.key
+        Notifier.post(this)
+        drawPatchBay()
+    }
 
     /** The screen, as plain text. Everything, including the probes that scrolled off. */
     private fun report(): String {

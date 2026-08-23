@@ -487,3 +487,75 @@ class ChipTest {
         assertEquals("", Chip.short("   "))
     }
 }
+
+/**
+ * The patch bay. Two paths, N destinations, and every crosspoint has to be honest about
+ * whether it can be made.
+ */
+class PatchBayTest {
+
+    @Test
+    fun `media to an earpiece is blocked and stays blocked even with full privilege`() {
+        // The app's longest-standing lie: offering the earpiece as a music destination.
+        assertEquals(
+            Cell.BLOCKED,
+            PatchBay.cell(Path.MEDIA, AudioType.EARPIECE, routingWorks = true, isCurrent = false),
+        )
+        assertEquals(
+            Cell.BLOCKED,
+            PatchBay.cell(Path.MEDIA, AudioType.EARPIECE, routingWorks = true, isCurrent = true),
+        )
+    }
+
+    @Test
+    fun `a call to an earpiece is the most ordinary connection there is`() {
+        assertEquals(
+            Cell.CONNECTABLE,
+            PatchBay.cell(Path.CALL, AudioType.EARPIECE, routingWorks = false, isCurrent = false),
+        )
+        assertEquals(
+            Cell.CONNECTED,
+            PatchBay.cell(Path.CALL, AudioType.EARPIECE, routingWorks = false, isCurrent = true),
+        )
+    }
+
+    @Test
+    fun `calls do not need the routing privilege, media does`() {
+        // This is the whole asymmetry of the platform, in one pair of assertions.
+        assertEquals(
+            Cell.CONNECTABLE,
+            PatchBay.cell(Path.CALL, AudioType.SPEAKER, routingWorks = false, isCurrent = false),
+        )
+        assertEquals(
+            Cell.BLOCKED,
+            PatchBay.cell(Path.MEDIA, AudioType.SPEAKER, routingWorks = false, isCurrent = false),
+        )
+        assertEquals(
+            Cell.CONNECTABLE,
+            PatchBay.cell(Path.MEDIA, AudioType.SPEAKER, routingWorks = true, isCurrent = false),
+        )
+    }
+
+    @Test
+    fun `HDMI takes music but never a phone call`() {
+        assertEquals(false, PatchBay.carriesCall(AudioType.HDMI))
+        assertEquals(false, PatchBay.carriesCall(AudioType.DOCK))
+        assertTrue(PatchBay.carriesCall(AudioType.BLUETOOTH_SCO))
+        assertTrue(PatchBay.carriesCall(AudioType.WIRED_HEADSET))
+    }
+
+    @Test
+    fun `every cell state has a distinct mark, so colour is not the only channel`() {
+        val marks = Cell.values().map { PatchBay.mark(it) }
+        assertEquals(marks.size, marks.toSet().size)
+        assertEquals("\u25CF", PatchBay.mark(Cell.CONNECTED))
+        assertEquals("\u25CB", PatchBay.mark(Cell.CONNECTABLE))
+    }
+
+    @Test
+    fun `the media row explains itself when it can go nowhere`() {
+        assertTrue(PatchBay.why(Path.MEDIA, routingWorks = false).contains("system switcher"))
+        assertEquals("media follows this app", PatchBay.why(Path.MEDIA, routingWorks = true))
+        assertEquals("calls follow this app", PatchBay.why(Path.CALL, routingWorks = false))
+    }
+}
