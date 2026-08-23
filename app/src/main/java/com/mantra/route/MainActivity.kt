@@ -35,6 +35,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var balanceLine: TextView
     private lateinit var notifButton: TextView
     private lateinit var copyButton: TextView
+    private lateinit var releaseButton: TextView
+    private lateinit var callAudioLine: TextView
     private lateinit var arrangeRows: LinearLayout
     private lateinit var arrangeReset: TextView
 
@@ -81,6 +83,8 @@ class MainActivity : AppCompatActivity() {
         balanceLine = findViewById(R.id.balance_line)
         notifButton = findViewById(R.id.notif_button)
         copyButton = findViewById(R.id.copy_button)
+        releaseButton = findViewById(R.id.release_button)
+        callAudioLine = findViewById(R.id.call_audio_line)
         arrangeRows = findViewById(R.id.arrange_rows)
         arrangeReset = findViewById(R.id.arrange_reset)
 
@@ -97,6 +101,20 @@ class MainActivity : AppCompatActivity() {
         buildProbeRows(Probe.runAllTitlesOnly())
 
         probeButton.setOnClickListener { probe() }
+
+        // The thing a person reaches for when the speakerphone has stopped working. It does not
+        // depend on Shizuku, on a probe having been run, or on anything else being right.
+        releaseButton.setOnClickListener {
+            val outcome = router.releaseCallAudio()
+            callAudioLine.text = when (outcome) {
+                is Router.Outcome.Moved -> outcome.how
+                is Router.Outcome.Partial -> outcome.caveat
+                is Router.Outcome.Refused -> outcome.why
+            }
+            state.lastSelectedKey = ""
+            Notifier.post(this)
+            redraw()
+        }
 
         // A screenshot of this screen scrolls off the bottom, and the detail column is the part
         // that matters most when something has gone wrong — the v2 fault was diagnosable only
@@ -307,6 +325,8 @@ class MainActivity : AppCompatActivity() {
             else "master_balance is not writable here — probe to find out"
         balanceLine.setTextColor(color(if (balanceUsable) R.color.sand else R.color.slate_ink))
 
+        callAudioLine.text = router.callAudioReport()
+
         notifButton.text =
             if (needsNotificationPermission()) "Allow notifications" else "Show the switcher"
     }
@@ -339,6 +359,9 @@ class MainActivity : AppCompatActivity() {
             if (row.key in off) builder.append("  (hidden)")
             builder.append('\n')
         }
+
+        builder.append("\nCALL AUDIO\n")
+        builder.append(router.callAudioReport()).append('\n')
 
         builder.append("\nPROBES\n")
         Probe.runAllTitlesOnly().forEach { (id, title, _) ->

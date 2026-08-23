@@ -90,6 +90,16 @@ object Notifier {
             big.addView(R.id.rows, view)
         }
 
+        // The release valve. Permanent, and above the picker, because a person whose
+        // speakerphone has stopped working needs to find this without knowing what it is called.
+        val release = RemoteViews(context.packageName, R.layout.notif_row)
+        release.setTextViewText(R.id.label, "Give calls back to the system")
+        release.setImageViewResource(R.id.glyph, R.drawable.ic_out_earpiece)
+        release.setTextColor(R.id.label, SAND)
+        release.setInt(R.id.glyph, "setColorFilter", SAND)
+        release.setOnClickPendingIntent(R.id.row_root, releaseIntent(context))
+        big.addView(R.id.rows, release)
+
         // The escape hatch, promoted to a permanent row rather than a consolation prize shown
         // only after a failure. On a phone that refuses MODIFY_AUDIO_ROUTING this is the ONLY
         // control here that moves music, so it belongs in the list, not hidden behind an error.
@@ -162,6 +172,12 @@ object Notifier {
         monoChip.setOnClickPendingIntent(R.id.chip, blendIntent(context, Blend.MONO))
         collapsed.addView(R.id.chips, monoChip)
 
+        val releaseChip = RemoteViews(context.packageName, R.layout.notif_chip)
+        releaseChip.setTextViewText(R.id.chip, "Release")
+        releaseChip.setTextColor(R.id.chip, SAND)
+        releaseChip.setOnClickPendingIntent(R.id.chip, releaseIntent(context))
+        collapsed.addView(R.id.chips, releaseChip)
+
         val pickerChip = RemoteViews(context.packageName, R.layout.notif_chip)
         pickerChip.setTextViewText(R.id.chip, "Switcher")
         pickerChip.setTextColor(R.id.chip, SAND)
@@ -207,6 +223,14 @@ object Notifier {
         Glyph.HDMI -> R.drawable.ic_out_hdmi
         Glyph.DOCK -> R.drawable.ic_out_dock
     }
+
+    private fun releaseIntent(context: Context): PendingIntent =
+        PendingIntent.getBroadcast(
+            context,
+            4000,
+            Intent(context, RouteReceiver::class.java).setAction(RouteReceiver.ACTION_RELEASE),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
 
     private fun pickerIntent(context: Context): PendingIntent =
         PendingIntent.getBroadcast(

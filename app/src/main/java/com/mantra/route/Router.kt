@@ -52,6 +52,52 @@ class Router(private val context: Context) {
         return selectOutput(row.id, caps)
     }
 
+    /**
+     * Hand the call route back to the system.
+     *
+     * THE BUG, 23.8.2026: setCommunicationDevice() was called and clearCommunicationDevice()
+     * was never called anywhere. That request PERSISTS. Tapping Earpiece pinned every call to
+     * the earpiece and the phone's own speakerphone button could no longer override it — media
+     * kept working, so it looked like broken hardware rather than a held request.
+     *
+     * An app that takes a system-wide resource must have a way to give it back, and that way
+     * has to be reachable by the person, not only by the code path that took it.
+     */
+    fun releaseCallAudio(): Outcome = try {
+        val held = runCatching { audio.communicationDevice }.getOrNull()
+        audio.clearCommunicationDevice()
+        val after = runCatching { audio.communicationDevice }.getOrNull()
+        when {
+            held == null -> Outcome.Moved("nothing was held; calls already follow the system")
+            after == null || after.id != held.id ->
+                Outcome.Moved("released — calls follow the system again")
+            else -> Outcome.Refused("the platform still reports ${after.productName} held")
+        }
+    } catch (t: Throwable) {
+        Outcome.Refused("could not release: " + (t.cause ?: t))
+    }
+
+    /** What the platform says about call audio right now. For the report. */
+    fun callAudioReport(): String {
+        val held = runCatching { audio.communicationDevice }.getOrNull()
+        val available = runCatching {
+            audio.availableCommunicationDevices.joinToString(", ") {
+                Outputs.labelFor(it.type, it.productName?.toString().orEmpty())
+            }
+        }.getOrDefault("unreadable")
+        val mode = runCatching { audio.mode }.getOrDefault(-1)
+        return buildString {
+            append("  held by this app: ")
+            append(
+                held?.let { Outputs.labelFor(it.type, it.productName?.toString().orEmpty()) }
+                    ?: "nothing (system decides)"
+            )
+            append('\n')
+            append("  available for calls: ").append(available).append('\n')
+            append("  audio mode: ").append(mode)
+        }
+    }
+
     fun activeId(): Int? {
         val communication = runCatching { audio.communicationDevice?.id }.getOrNull()
         if (communication != null && outputs().any { it.id == communication }) return communication

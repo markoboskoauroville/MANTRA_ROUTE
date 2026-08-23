@@ -46,6 +46,28 @@
             android:textSize="14sp" />
 
         <TextView
+            android:id="@+id/release_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:background="@color/slate"
+            android:gravity="center"
+            android:paddingTop="14dp"
+            android:paddingBottom="14dp"
+            android:text="Fix call audio — give calls back to the system"
+            android:textColor="@color/amber"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/call_audio_line"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="@color/slate_ink"
+            android:textSize="12sp"
+            android:fontFamily="monospace" />
+
+        <TextView
             android:id="@+id/notif_button"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

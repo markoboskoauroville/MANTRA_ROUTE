@@ -325,3 +325,40 @@ and remembers what the user last did. The collapsed row is made complete instead
 ### Tests
 
 TEST 1: 48 green.
+
+---
+
+## v7 — the app broke the speakerphone
+
+Reported from the phone, 23.8.2026: during a call there is no sound on speakerphone even when
+the speakerphone button is pressed, while music through the speaker is fine.
+
+**Cause, and it is this app.** `Router.selectOutput` calls `audio.setCommunicationDevice(device)`.
+`clearCommunicationDevice()` appeared **nowhere in the codebase**. That request persists. Every
+tap on Earpiece pinned the call route to the earpiece, and the phone's own speakerphone control
+could not override a held request. Media was untouched, which is why it read as broken hardware
+rather than as software holding a resource.
+
+**The rule this broke:** an app that takes a system-wide resource must have a way to give it
+back, and that way must be reachable by the person — not only by the code path that took it.
+There was a `set` with no `clear`, and nothing in the four tests catches that, because each
+individual selection worked exactly as designed.
+
+**Immediate remedy without a new build:** force-stop the app, or reboot. The pin is runtime
+state and does not survive either.
+
+**v7 adds:**
+- `Router.releaseCallAudio()` — clears the held device and verifies it actually let go
+- A button at the top of the screen, *Fix call audio — give calls back to the system*, which
+  depends on nothing: not Shizuku, not a probe having been run
+- A `Release` chip in the collapsed notification row and a full row in the panel
+- A live `CALL AUDIO` readout: what is held, what is available for calls, the audio mode — and
+  the same block in the copied report
+
+**Not yet done, and it should be:** `selectOutput` still has no automatic release. Selecting an
+output holds it until the person releases it by hand. The honest fix is either to release on a
+second tap of the same row, or never to hold it at all outside a call. That decision needs the
+call-audio readout from a real device first.
+
+TEST 1: 48 green. None of them cover this — the fault was a missing counterpart to a call that
+worked, which is a shape unit tests over pure logic cannot see.
