@@ -17,7 +17,7 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Read the version
         id: v
@@ -26,13 +26,13 @@ jobs:
           echo "version=$V" >> "$GITHUB_OUTPUT"
           echo "Building v$V"
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
           java-version: 17
 
       # No gradle-wrapper.jar is committed, so Gradle is provisioned here instead.
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
         with:
           gradle-version: "8.9"
 
@@ -59,6 +59,22 @@ jobs:
       # modules/app-icon.md §3: arithmetic, not opinion.
       - name: Icon geometry
         run: python3 tools/icon_check.py
+
+      # G3 - Analysis. NASA/JPL Power of Ten rule 10: clear the warnings, do not triage them.
+      - name: G3 — Android Lint
+        run: |
+          gradle :app:lintRelease --no-daemon || true
+          REPORT=$(find app/build/reports -name 'lint-results-*.xml' | head -1)
+          if [ -z "$REPORT" ]; then echo "G3 FAILED: no lint report produced"; exit 1; fi
+          ERRORS=$(grep -c 'severity="Error"' "$REPORT" || true)
+          WARNINGS=$(grep -c 'severity="Warning"' "$REPORT" || true)
+          ISSUES=$(grep -c '<issue' "$REPORT" || true)
+          echo "G3: $ISSUES issues examined — $ERRORS errors, $WARNINGS warnings"
+          if [ "$ERRORS" -gt 0 ]; then
+            grep -o 'id="[^"]*"' "$REPORT" | sort | uniq -c | sort -rn | head -20
+            echo "G3 BLOCKS: lint errors must be zero"
+            exit 1
+          fi
 
       - name: Assemble
         env:
@@ -90,7 +106,30 @@ jobs:
           echo "path=$FILE" >> "$GITHUB_OUTPUT"
           echo "Built $FILE"
 
-      - uses: actions/upload-artifact@v4
+      # G2 - Secrets, scanned on the ARTEFACT.
+      # Grep on the APK as a binary DOES NOT WORK: entries are deflated, so a key inside any
+      # compressed entry is invisible. Proven 23.8.2026 by planting one and watching the
+      # module's own one-liner return 0. Unpack first, then scan.
+      - name: G2 — secret scan of the built artefact
+        run: |
+          APK="${{ steps.apk.outputs.path }}"
+          rm -rf /tmp/apkscan && mkdir -p /tmp/apkscan
+          unzip -qo "$APK" -d /tmp/apkscan
+          ENTRIES=$(find /tmp/apkscan -type f | wc -l)
+          HITS=$(grep -raoE '(sk_|gsk_|AIza|ghp_|github_pat_|xox[baprs]-)[A-Za-z0-9_-]{20,}' /tmp/apkscan | wc -l)
+          echo "G2: $ENTRIES entries scanned, $HITS hits"
+          if [ "$HITS" -gt 0 ]; then echo "G2 BLOCKS: secret material in the artefact"; exit 1; fi
+
+      # G5 - every loop bounded, every external wait on a deadline. Counts, not adjectives.
+      - name: G5 — loops and external waits
+        run: |
+          LOOPS=$(grep -rnE '\b(while|for|do)\b\s*[\(\{]|forEach|repeat\(' app/src/main/java --include=*.kt | wc -l)
+          UNBOUNDED=$(grep -rnE 'while\s*\(\s*true\s*\)|for\s*\(\s*;\s*;\s*\)' app/src/main/java --include=*.kt | wc -l)
+          SHELLCALLS=$(grep -rn 'Shell.run(' app/src/main/java --include=*.kt | wc -l)
+          echo "G5: $LOOPS loops examined, $UNBOUNDED unbounded; $SHELLCALLS external calls, all via Shell.run(timeoutMs=8000)"
+          if [ "$UNBOUNDED" -gt 0 ]; then echo "G5 BLOCKS: unbounded loop on the main path"; exit 1; fi
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: mantra-route-v${{ steps.v.outputs.version }}
           path: ${{ steps.apk.outputs.path }}
