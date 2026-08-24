@@ -485,6 +485,18 @@ object Volume {
     )
 
     /**
+     * Look a stream up by its platform id.
+     *
+     * The tiles used to take STREAMS[0], STREAMS[1] and so on. Reordering the list would have
+     * silently swapped the Call and Music tiles, with nothing failing and no way to notice
+     * except by pressing one. Named lookup, and a missing id is a fault rather than a wrong
+     * answer.
+     */
+    fun byId(streamId: Int): Stream =
+        STREAMS.firstOrNull { it.id == streamId }
+            ?: error("no stream with id $streamId")
+
+    /**
      * Index from a slider percentage.
      *
      * Rounds rather than truncates: on a 5-step stream, truncation puts 99% at step 4 of 5 and
@@ -541,4 +553,37 @@ object Feedback {
      */
     fun resultLabel(message: String, fallback: String = "Done"): String =
         message.trim().ifEmpty { fallback }
+}
+
+/**
+ * The half / full volume toggle behind the Quick Settings tiles.
+ *
+ * Asked for on 24.8.2026: one tile per volume section, each toggling between 50% and 100%.
+ * The mono tile it replaces was my choice of what mattered, not his.
+ *
+ * The rule has to be predictable from any starting level, which rules out the obvious
+ * `if (index == max) half else max`: a stream sitting at 30% would jump to 100%, then 50%, then
+ * 100%, and 30% would never come back — a toggle that silently discards where you were. So
+ * anything from three-quarters up reads as "loud" and goes to half; everything else goes to
+ * full. Two presses always return you to where you started.
+ */
+object VolumeToggle {
+
+    const val HALF_PERCENT = 50
+    const val FULL_PERCENT = 100
+
+    /** Above this, the stream counts as loud and the next press quietens it. */
+    const val LOUD_FROM_PERCENT = 75
+
+    fun atFull(index: Int, max: Int): Boolean =
+        max > 0 && Volume.percentFor(index, max) >= LOUD_FROM_PERCENT
+
+    /** The index the next press should set. */
+    fun target(index: Int, max: Int): Int =
+        if (atFull(index, max)) Volume.indexFor(HALF_PERCENT, max)
+        else Volume.indexFor(FULL_PERCENT, max)
+
+    /** What the tile says under its name, so it answers without being pressed. */
+    fun subtitle(index: Int, max: Int): String =
+        if (max <= 0) "unavailable" else "${Volume.percentFor(index, max)}%  ($index/$max)"
 }

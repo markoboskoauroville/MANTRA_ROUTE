@@ -43,19 +43,6 @@
 
         <!-- The Quick Settings tile. TILE=false so it is not force-added; it is placed by
              hand from the pencil / edit button in the Quick Settings panel. -->
-        <service
-            android:name=".MonoTileService"
-            android:exported="true"
-            android:icon="@drawable/ic_notification"
-            android:label="Mono audio"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
-            <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.service.quicksettings.ACTIVE_TILE"
-                android:value="false" />
-        </service>
 
         <receiver
             android:name=".RouteReceiver"
@@ -84,5 +71,64 @@
             android:enabled="true"
             android:exported="true"
             android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
+        <!-- Four Quick Settings tiles, one per volume stream, each toggling 50% / 100%.
+             Android requires a distinct class per tile, hence four services over one. -->
+        <service
+            android:name=".CallVolumeTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_stream_call"
+            android:label="Call volume"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="false" />
+        </service>
+
+        <service
+            android:name=".MusicVolumeTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_stream_music"
+            android:label="Music volume"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="false" />
+        </service>
+
+        <service
+            android:name=".RingVolumeTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_stream_ring"
+            android:label="Ring volume"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="false" />
+        </service>
+
+        <service
+            android:name=".AlarmVolumeTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_stream_alarm"
+            android:label="Alarm volume"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="false" />
+        </service>
+
     </application>
 </manifest>

@@ -562,3 +562,47 @@ This session opened the tree, edited it, and only then read `git log` — findin
 already committed by another session. One unintended edit to `Probe.kt` was made and reverted
 before any commit. **The v2 incident had exactly this shape and the lesson did not stick: read
 the log before touching the tree, every time, because the tree is shared and the chat is not.**
+
+---
+
+## v14 — four volume tiles, and mono off the shelf
+
+Asked for on 24.8.2026: one Quick Settings tile per volume section, each toggling 50% / 100%.
+`MonoTileService` is deleted. Mono was **my** judgement of what deserved that slot; a level
+toggle is what was wanted, and it is the better use of the strip — the mono setting changes
+twice a year, a volume changes hourly.
+
+Four tiles: **Call, Music, Ring, Alarm**. Each shows its live level in the subtitle
+(`53%  (8/15)`), so it answers without being pressed, and lights ACTIVE when loud.
+
+They must be placed by hand: pull the shade down twice, tap the pencil, drag them up from the
+inactive tiles at the bottom.
+
+### The toggle rule, and why it is not the obvious one
+
+The obvious rule is `if (index == max) half else full`. It is wrong: a stream sitting at 87%
+would be raised to 100% rather than halved, and where you were is silently discarded. Instead
+anything from **75% up** counts as loud and goes to half; everything else goes to full. Two
+presses always return you to where you started.
+
+### A test hole the sabotage step found
+
+The first version of this suite **passed with the naive toggle in place.** Every case tested was
+either exactly at maximum or well below the line, so the two rules agreed on all of them. The
+sabotage exercise — break it on purpose, confirm the tests go red — went green, which is the
+signal that the tests are decorative.
+
+Added: 13/15 and 14/15, loud but not maximum, plus 11/15 just below the line. The sabotage now
+fails on that test specifically. **This is the second time the "make it fail on purpose" step
+has caught something the tests would not have**, and it is the cheapest step in the whole
+process.
+
+### Tiles bind by stream id, not list position
+
+They were written as `Volume.STREAMS[0]`, `[1]`, `[2]`, `[3]`. Reordering that list would have
+silently swapped the Call and Music tiles with nothing failing anywhere. Now `Volume.byId(0)`,
+and an unknown id throws rather than returning a neighbour.
+
+### Icons
+
+Four more from the official Material Symbols: `call`, `music_note`, `notifications`, `alarm`.

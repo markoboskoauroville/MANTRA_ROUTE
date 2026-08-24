@@ -586,3 +586,87 @@ class FeedbackTest {
         assertTrue(Feedback.HOLD_MS in 1200..4000)
     }
 }
+
+/**
+ * The half / full tile toggle.
+ */
+class VolumeToggleTest {
+
+    @Test
+    fun `full goes to half and half goes back to full`() {
+        assertEquals(8, VolumeToggle.target(15, 15))   // 100% -> 50%
+        assertEquals(15, VolumeToggle.target(8, 15))   // 53%  -> 100%
+        assertEquals(8, VolumeToggle.target(16, 16))
+        assertEquals(16, VolumeToggle.target(8, 16))
+    }
+
+    @Test
+    fun `two presses return you to where you started`() {
+        // The property that rules out the naive `if (index == max) half else max`.
+        for (max in listOf(5, 7, 15, 16, 30)) {
+            val half = Volume.indexFor(50, max)
+            val once = VolumeToggle.target(half, max)
+            val twice = VolumeToggle.target(once, max)
+            assertEquals("max=$max", half, twice)
+        }
+    }
+
+    @Test
+    fun `a stream that is loud but not maximum still quietens`() {
+        // The case the whole LOUD_FROM_PERCENT rule exists for, and the one the first version
+        // of this suite missed: 13/15 is 87%, loud but not at the top. The naive
+        // `if (index == max)` toggle raises it to 100% instead of halving it, and every other
+        // test in this class passes with that bug in place.
+        assertTrue(VolumeToggle.atFull(13, 15))
+        assertEquals(8, VolumeToggle.target(13, 15))
+        assertEquals(8, VolumeToggle.target(14, 15))
+        // and just below the line, it goes up
+        assertEquals(false, VolumeToggle.atFull(11, 15))
+        assertEquals(15, VolumeToggle.target(11, 15))
+    }
+
+    @Test
+    fun `a quiet stream goes loud first, from any starting level`() {
+        assertEquals(15, VolumeToggle.target(0, 15))
+        assertEquals(15, VolumeToggle.target(1, 15))
+        assertEquals(15, VolumeToggle.target(4, 15))
+    }
+
+    @Test
+    fun `the loud boundary is exact on both sides`() {
+        // 75% counts as loud; anything under it does not.
+        assertTrue(VolumeToggle.atFull(75, 100))
+        assertEquals(false, VolumeToggle.atFull(74, 100))
+    }
+
+    @Test
+    fun `a stream with no range is neither full nor toggled`() {
+        assertEquals(false, VolumeToggle.atFull(0, 0))
+        assertEquals(0, VolumeToggle.target(0, 0))
+        assertEquals("unavailable", VolumeToggle.subtitle(3, 0))
+    }
+
+    @Test
+    fun `the subtitle answers without a press`() {
+        assertEquals("100%  (15/15)", VolumeToggle.subtitle(15, 15))
+        assertEquals("53%  (8/15)", VolumeToggle.subtitle(8, 15))
+    }
+
+    @Test
+    fun `streams are found by platform id, not by list position`() {
+        assertEquals("Call", Volume.byId(0).label)
+        assertEquals("Music", Volume.byId(3).label)
+        assertEquals("Ring", Volume.byId(2).label)
+        assertEquals("Alarm", Volume.byId(4).label)
+    }
+
+    @Test
+    fun `an unknown stream id is a fault, not a wrong answer`() {
+        try {
+            Volume.byId(99)
+            throw AssertionError("expected a failure for an unknown stream id")
+        } catch (e: IllegalStateException) {
+            assertTrue(e.message!!.contains("99"))
+        }
+    }
+}
