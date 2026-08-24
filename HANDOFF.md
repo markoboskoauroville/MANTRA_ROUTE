@@ -535,3 +535,30 @@ four stay the same size whatever the labels say.
 
 57 green, down from 64 — six tests deleted with the features they covered, and six updated for
 the rename. **A test kept alive for a deleted feature is dead code that passes.**
+
+---
+
+## v13 — icons, matched to TTT_MINI properly
+
+v11 redrew the icons as legacy Material Icons: `viewportWidth="24"`, hand-transcribed paths.
+Close, but not the house style. **TTT_MINI uses Material *Symbols*** — `viewportWidth="960"`,
+one filled path, `fillColor="@android:color/white"` with `android:tint`.
+
+The difference is checkable: TTT_MINI's check mark is `M382,720L154,492…` where Google's published
+symbol is `M382-240 154-468…`. Same path, y shifted by +960. So the conversion is exactly
+`y -> y + 960`, and every icon here is now the official published path put through that shift
+rather than an approximation drawn by hand.
+
+Eleven icons regenerated from `google/material-design-icons` (Apache 2.0): speaker is
+`volume_up` — the loudspeaker with waves, which reads as "sound leaves here" where the
+speaker-cabinet glyph reads as furniture — earpiece is `headphones`, wired is `headset_mic`,
+plus usb, bluetooth, bluetooth_searching, hearing_aid, hdmi, dock, cast.
+
+The converter is kept at `tools/icon_from_material.py` so the next one does not get hand-drawn.
+
+### A collision worth recording
+
+This session opened the tree, edited it, and only then read `git log` — finding v11 and v12
+already committed by another session. One unintended edit to `Probe.kt` was made and reverted
+before any commit. **The v2 incident had exactly this shape and the lesson did not stick: read
+the log before touching the tree, every time, because the tree is shared and the chat is not.**
