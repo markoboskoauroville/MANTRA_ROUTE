@@ -479,8 +479,11 @@ object Volume {
     /** The four that matter here. IDs are the AudioManager STREAM_* constants. */
     val STREAMS = listOf(
         Stream(0, "Call"),
-        Stream(3, "Music"),
+        // "Media", not "Music" — it is the word the system volume panel uses, and matching the
+        // platform's vocabulary costs nothing and saves the person translating.
+        Stream(3, "Media"),
         Stream(2, "Ring"),
+        Stream(5, "Notification"),
         Stream(4, "Alarm"),
     )
 
@@ -586,4 +589,35 @@ object VolumeToggle {
     /** What the tile says under its name, so it answers without being pressed. */
     fun subtitle(index: Int, max: Int): String =
         if (max <= 0) "unavailable" else "${Volume.percentFor(index, max)}%  ($index/$max)"
+}
+
+/**
+ * What a Quick Settings tile has to say when the panel gives it no room to speak.
+ *
+ * Reported 24.8.2026 with a screenshot: Nothing OS draws the tiles as bare circles. No label,
+ * no subtitle — just a glyph. So a two-state toggle is unreadable: you cannot tell 100% from
+ * 50% by looking, and one tile rendered as an empty circle with no clue what it was.
+ *
+ * The rule quoted with it is the reason this matters: engage more than one sense and
+ * comprehension goes up. A tile that speaks through icon shape ALONE is one channel, and it was
+ * the channel that failed. So: the glyph stays, the percentage is drawn into the icon itself,
+ * the label carries both in words for wherever labels do appear and for a screen reader, and
+ * the press answers with a haptic tick. Four channels for one fact.
+ */
+object TileText {
+
+    /** Drawn inside the icon. Short enough to stay legible at tile size. */
+    fun badge(index: Int, max: Int): String =
+        if (max <= 0) "--" else "${Volume.percentFor(index, max)}%"
+
+    /** The label, where the panel shows one. Name and level in the same breath. */
+    fun label(name: String, index: Int, max: Int): String =
+        if (max <= 0) "$name unavailable" else "$name ${badge(index, max)}"
+
+    /** §5: a control says what the NEXT press does. */
+    fun nextAction(index: Int, max: Int): String = when {
+        max <= 0 -> "no range on this device"
+        VolumeToggle.atFull(index, max) -> "tap for 50%"
+        else -> "tap for 100%"
+    }
 }

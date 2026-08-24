@@ -606,3 +606,55 @@ and an unknown id throws rather than returning a neighbour.
 ### Icons
 
 Four more from the official Material Symbols: `call`, `music_note`, `notifications`, `alarm`.
+
+---
+
+## v15 — five tiles that can be read, and the blank-icon bug
+
+### The blank tile was a malformed vector, and nothing anywhere said so
+
+One Quick Settings tile rendered as an empty circle. Cause: the hand-rolled tokeniser in
+`tools/icon_from_material.py` **glued implicit repeated coordinate groups together with no
+separator** — `L100,200` followed by an implicit `300,400` became `L100,200300,400`. Paths
+without implicit repeats survived, which is why most icons looked right; `alarm` has them and
+became unparseable.
+
+**A malformed vector compiles, packages, installs and draws nothing.** No lint error, no crash,
+no warning. The only way to catch it is to look at the pixels.
+
+So the converter no longer parses paths by hand — `svgpathtools` understands the grammar and the
+shift is a real transform — and **every icon is now rendered to PNG and checked for ink before
+it is kept**. 16 generated, 0 blank, and the check exits non-zero if any is.
+
+Rendering them also showed a second fault the eye would have caught and the build never would:
+Ring was using the bell glyph, which belongs to Notification. Both now match the system volume
+panel exactly.
+
+### Four channels for one fact
+
+The screenshot showed the panel drawing tiles as bare circles — no label, no subtitle. A
+two-state toggle that cannot be read is a coin flip. The rule quoted with the request is the
+reason it matters: engage more than one sense and comprehension goes up. A tile speaking through
+glyph shape alone is one channel, and it was the channel that failed.
+
+    SHAPE     the glyph, matched to the system volume panel
+    NUMBER    the percentage drawn INTO the icon bitmap, because that square is all there is
+    WORDS     label "Media 100%" and subtitle "tap for 50%", for the expanded panel and for
+              a screen reader
+    TOUCH     a haptic tick on press
+
+### Five streams, named as the platform names them
+
+Call, **Media** (not Music — the system panel says Media), Ring, **Notification** (new), Alarm.
+
+### A collision, handled better than last time
+
+Another session was working in this tree with uncommitted changes: `TileIcon.kt`, `TileText`,
+the Media rename and the Notification stream. **That work is better than what this session would
+have done alone** — drawing the number into the bitmap is the right answer to a panel that gives
+you no label, and I would not have found it. It was backed up before anything was touched, and
+then completed rather than replaced: the tile classes now use it, a fifth tile was added, and
+the icons it depended on were repaired.
+
+TEST 1: 71 green. The Media rename correctly broke a v14 test that asserted "Music" — the test
+doing its job, and fixed rather than deleted.

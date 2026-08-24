@@ -655,7 +655,7 @@ class VolumeToggleTest {
     @Test
     fun `streams are found by platform id, not by list position`() {
         assertEquals("Call", Volume.byId(0).label)
-        assertEquals("Music", Volume.byId(3).label)
+        assertEquals("Media", Volume.byId(3).label)   // renamed in v15 to match the system panel
         assertEquals("Ring", Volume.byId(2).label)
         assertEquals("Alarm", Volume.byId(4).label)
     }
@@ -668,5 +668,47 @@ class VolumeToggleTest {
         } catch (e: IllegalStateException) {
             assertTrue(e.message!!.contains("99"))
         }
+    }
+}
+
+/**
+ * What a tile says when the panel gives it no room to speak.
+ */
+class TileTextTest {
+
+    @Test
+    fun `the badge is the percentage, short enough for a tile`() {
+        assertEquals("100%", TileText.badge(15, 15))
+        assertEquals("50%", TileText.badge(8, 16))
+        assertTrue(TileText.badge(8, 15).length <= 4)
+    }
+
+    @Test
+    fun `a stream with no range says so rather than showing zero percent`() {
+        // "0%" would be a lie: the stream has no range, it is not silent.
+        assertEquals("--", TileText.badge(0, 0))
+        assertEquals("Call unavailable", TileText.label("Call", 0, 0))
+    }
+
+    @Test
+    fun `the label carries the name and the level together`() {
+        assertEquals("Media 100%", TileText.label("Media", 16, 16))
+        assertEquals("Alarm 50%", TileText.label("Alarm", 8, 16))
+    }
+
+    @Test
+    fun `the subtitle says what the next press does, not what the state is`() {
+        assertEquals("tap for 50%", TileText.nextAction(15, 15))
+        assertEquals("tap for 100%", TileText.nextAction(4, 15))
+        assertEquals("no range on this device", TileText.nextAction(0, 0))
+    }
+
+    @Test
+    fun `every stream in the panel has a tile, and the names match the platform`() {
+        // "Media" not "Music": the system volume panel says Media, and borrowing its
+        // vocabulary means nothing has to be translated by the person reading it.
+        assertEquals(listOf("Call", "Media", "Ring", "Notification", "Alarm"),
+            Volume.STREAMS.map { it.label })
+        listOf(0, 3, 2, 5, 4).forEach { Volume.byId(it) }
     }
 }

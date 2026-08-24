@@ -72,8 +72,9 @@
             android:exported="true"
             android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
-        <!-- Four Quick Settings tiles, one per volume stream, each toggling 50% / 100%.
-             Android requires a distinct class per tile, hence four services over one. -->
+
+        <!-- Five Quick Settings tiles, one per volume stream, each toggling 50% / 100%.
+             Android requires a distinct class per tile, hence five services over one. -->
         <service
             android:name=".CallVolumeTileService"
             android:exported="true"
@@ -89,10 +90,10 @@
         </service>
 
         <service
-            android:name=".MusicVolumeTileService"
+            android:name=".MediaVolumeTileService"
             android:exported="true"
-            android:icon="@drawable/ic_stream_music"
-            android:label="Music volume"
+            android:icon="@drawable/ic_stream_media"
+            android:label="Media volume"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
@@ -107,6 +108,20 @@
             android:exported="true"
             android:icon="@drawable/ic_stream_ring"
             android:label="Ring volume"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="false" />
+        </service>
+
+        <service
+            android:name=".NotificationVolumeTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_stream_notification"
+            android:label="Notification volume"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
