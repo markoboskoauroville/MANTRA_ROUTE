@@ -29,6 +29,7 @@ object Notifier {
     private const val AMBER = 0xFFF59E0B.toInt()
     private const val SAND = 0xFFF2DDB4.toInt()
     private const val SLATE = 0xFF5A6B7C.toInt()
+    private const val FAULT = 0xFFEF4444.toInt()
 
     fun ensureChannel(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java)
@@ -99,6 +100,30 @@ object Notifier {
         release.setInt(R.id.glyph, "setColorFilter", SAND)
         release.setOnClickPendingIntent(R.id.row_root, releaseIntent(context))
         big.addView(R.id.rows, release)
+
+        // Volume, in the shade. Asked for 24.8.2026: the levels were only reachable by opening
+        // the app, and the level is the thing that made a correctly-routed call inaudible.
+        //
+        // Call and Music only. Ring and Alarm belong to the phone's own volume keys and putting
+        // four rows here would push the outputs off the top of an expanded notification.
+        listOf(Volume.STREAMS[0], Volume.STREAMS[1]).forEach { stream ->
+            val max = router.volumeMax(stream.id)
+            val index = router.volumeIndex(stream.id)
+            val row = RemoteViews(context.packageName, R.layout.notif_volume)
+            row.setImageViewResource(R.id.vol_glyph, R.drawable.ic_out_speaker)
+            row.setTextViewText(R.id.vol_label, Volume.label(stream.label, index, max))
+            // Red when a stream is low enough to sound broken — the whole reason this row exists.
+            row.setTextColor(
+                R.id.vol_label,
+                if (Volume.isLow(index, max)) FAULT else SAND,
+            )
+            row.setInt(R.id.vol_glyph, "setColorFilter", if (Volume.isLow(index, max)) FAULT else SAND)
+            row.setTextColor(R.id.vol_down, SAND)
+            row.setTextColor(R.id.vol_up, SAND)
+            row.setOnClickPendingIntent(R.id.vol_down, volumeIntent(context, stream.id, -1))
+            row.setOnClickPendingIntent(R.id.vol_up, volumeIntent(context, stream.id, +1))
+            big.addView(R.id.rows, row)
+        }
 
         // The blend row. Exactly one is in force, so these behave as a radio: choosing one
         // visibly takes the mark off the last. §6.
@@ -206,6 +231,18 @@ object Notifier {
         Glyph.HDMI -> R.drawable.ic_out_hdmi
         Glyph.DOCK -> R.drawable.ic_out_dock
     }
+
+    /** Step a stream by one. requestCode encodes stream and direction so they do not collide. */
+    private fun volumeIntent(context: Context, streamId: Int, step: Int): PendingIntent =
+        PendingIntent.getBroadcast(
+            context,
+            5000 + streamId * 10 + (if (step > 0) 1 else 0),
+            Intent(context, RouteReceiver::class.java)
+                .setAction(RouteReceiver.ACTION_VOLUME)
+                .putExtra(RouteReceiver.EXTRA_STREAM, streamId)
+                .putExtra(RouteReceiver.EXTRA_STEP, step),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
 
     private fun releaseIntent(context: Context): PendingIntent =
         PendingIntent.getBroadcast(

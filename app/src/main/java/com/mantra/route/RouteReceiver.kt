@@ -28,10 +28,12 @@ class RouteReceiver : BroadcastReceiver() {
         val action = intent.action
         val deviceId = intent.getIntExtra(EXTRA_DEVICE_ID, -1)
         val blendName = intent.getStringExtra(EXTRA_BLEND)
+        val streamId = intent.getIntExtra(EXTRA_STREAM, -1)
+        val step = intent.getIntExtra(EXTRA_STEP, 0)
 
         Thread {
             try {
-                handle(context, action, deviceId, blendName)
+                handle(context, action, deviceId, blendName, streamId, step)
                 Notifier.post(context)
             } finally {
                 pending.finish()
@@ -39,12 +41,32 @@ class RouteReceiver : BroadcastReceiver() {
         }.start()
     }
 
-    private fun handle(context: Context, action: String?, deviceId: Int, blendName: String?) {
+    private fun handle(
+        context: Context,
+        action: String?,
+        deviceId: Int,
+        blendName: String?,
+        streamId: Int,
+        step: Int,
+    ) {
         val router = Router(context)
         val state = State(context)
         val caps = state.capabilities()
 
         when (action) {
+            ACTION_VOLUME -> {
+                // Step by one index, then re-read. setVolume already verifies and falls back to
+                // the shell, so the toast reports what the platform actually did, not the step
+                // that was requested.
+                val max = router.volumeMax(streamId)
+                val wanted = (router.volumeIndex(streamId) + step).coerceIn(0, max)
+                when (val outcome = router.setVolume(streamId, wanted, caps)) {
+                    is Router.Outcome.Moved -> say(context, outcome.how)
+                    is Router.Outcome.Partial -> say(context, outcome.caveat)
+                    is Router.Outcome.Refused -> say(context, outcome.why)
+                }
+            }
+
             ACTION_SELECT -> {
                 val key = router.allRows().firstOrNull { it.id == deviceId }?.key
                 when (val outcome = router.selectOutput(deviceId, caps)) {
@@ -91,6 +113,9 @@ class RouteReceiver : BroadcastReceiver() {
     }
 
     companion object {
+        const val ACTION_VOLUME = "com.mantra.route.VOLUME"
+        const val EXTRA_STREAM = "stream"
+        const val EXTRA_STEP = "step"
         const val ACTION_RELEASE = "com.mantra.route.RELEASE"
         const val ACTION_PICKER = "com.mantra.route.PICKER"
         const val ACTION_SELECT = "com.mantra.route.SELECT"
