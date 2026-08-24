@@ -32,6 +32,13 @@ data class Capabilities(val results: List<ProbeResult>) {
     val anyRouting: Boolean get() = works(Probe.PERM_ROUTING) || works(Probe.APPOP_ROUTING)
 }
 
+/**
+ * v11 removed four probes: Swap L/R, MODIFY_AUDIO_ROUTING, cmd audio and cmd media_router.
+ *
+ * Every one of them returned the same verdict on every run and had no path to a different one.
+ * MODIFY_AUDIO_ROUTING is signature|privileged and will be refused on every retail Android
+ * that exists. A probe whose answer cannot change is not a measurement, it is a paragraph.
+ */
 object Probe {
 
     const val SHELL = "shell"
@@ -50,12 +57,8 @@ object Probe {
         shell(),
         mono(),
         balance(),
-        swap(),
-        permRouting(packageName),
         appopRouting(packageName),
         listener(packageName),
-        cmd(CMD_AUDIO, "cmd audio", "reading and setting audio policy from shell", "audio"),
-        cmd(CMD_MEDIA_ROUTER, "cmd media_router", "transferring a route between devices", "media_router"),
         cmd(CMD_BLUETOOTH, "cmd bluetooth_manager", "making a paired device the active one", "bluetooth_manager"),
     ).let { Capabilities(it) }
 
@@ -70,12 +73,8 @@ object Probe {
         Triple(SHELL, "Shizuku shell", "everything below"),
         Triple(MONO, "Mono downmix", "collapsing both channels into one, everywhere"),
         Triple(BALANCE, "Left / right balance", "panning the whole system towards one ear"),
-        Triple(SWAP, "Swap L / R", "exchanging the two channels"),
-        Triple(PERM_ROUTING, "MODIFY_AUDIO_ROUTING", "moving any app's media audio, directly"),
         Triple(APPOP_ROUTING, "MEDIA_ROUTING_CONTROL app-op", "moving another app's audio through MediaRouter2"),
         Triple(LISTENER, "Notification listener", "naming which app is currently playing"),
-        Triple(CMD_AUDIO, "cmd audio", "reading and setting audio policy from shell"),
-        Triple(CMD_MEDIA_ROUTER, "cmd media_router", "transferring a route between devices"),
         Triple(CMD_BLUETOOTH, "cmd bluetooth_manager", "making a paired device the active one"),
     )
 

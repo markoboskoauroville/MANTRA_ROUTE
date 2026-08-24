@@ -27,7 +27,7 @@ class OutputsTest {
                 out(2, AudioType.SPEAKER, "Nothing Phone (2a)"),
             )
         )
-        assertEquals(listOf("Phone speaker", "Earpiece"), rows.map { it.label })
+        assertEquals(listOf("Speaker", "Earpiece"), rows.map { it.label })
     }
 
     // ---- the case it must REFUSE ----------------------------------------------------------
@@ -44,7 +44,7 @@ class OutputsTest {
             )
         )
         assertEquals(1, rows.size)
-        assertEquals("Phone speaker", rows.first().label)
+        assertEquals("Speaker", rows.first().label)
     }
 
     @Test
@@ -120,7 +120,7 @@ class OutputsTest {
         val b = a.reversed()
         assertEquals(Outputs.rows(a), Outputs.rows(b))
         assertEquals(
-            listOf("Phone speaker", "Wired headphones", "Ear"),
+            listOf("Speaker", "Wired headphones", "Ear"),
             Outputs.rows(a).map { it.label },
         )
     }
@@ -135,7 +135,7 @@ class OutputsTest {
 
     @Test
     fun `a built-in output ignores the model name the platform hands back`() {
-        assertEquals("Phone speaker", Outputs.labelFor(AudioType.SPEAKER, "Nothing Phone (2a)"))
+        assertEquals("Speaker", Outputs.labelFor(AudioType.SPEAKER, "Nothing Phone (2a)"))
         assertEquals("Earpiece", Outputs.labelFor(AudioType.EARPIECE, "Nothing Phone (2a)"))
     }
 
@@ -192,7 +192,7 @@ class ArrangementTest {
         )
         val earpiece = rows.first { it.label == "Earpiece" }
         val visible = Outputs.visible(rows, setOf(earpiece.key))
-        assertEquals(listOf("Phone speaker"), visible.map { it.label })
+        assertEquals(listOf("Speaker"), visible.map { it.label })
     }
 
     /**
@@ -203,7 +203,7 @@ class ArrangementTest {
     @Test
     fun `an output never seen before is shown, because the set holds exclusions`() {
         val rows = Outputs.rows(listOf(out(1, AudioType.SPEAKER), out(2, 99, "Future Thing")))
-        val off = setOf(Outputs.keyOf(AudioType.SPEAKER, "Phone speaker"))
+        val off = setOf(Outputs.keyOf(AudioType.SPEAKER, "Speaker"))
         assertEquals(listOf("Future Thing"), Outputs.visible(rows, off).map { it.label })
     }
 
@@ -227,18 +227,9 @@ class BlendMathTest {
      * The one that matters. If this ever starts returning a number, a control that cannot work
      * has quietly become one that claims to.
      */
-    @Test
-    fun `swap has no balance value, because balance pans and cannot swap`() {
-        assertNull(BlendMath.balanceFor(Blend.SWAPPED))
-    }
+    
 
-    @Test
-    fun `stereo and mono both sit centred, they differ only in the downmix`() {
-        assertEquals(0.0f, BlendMath.balanceFor(Blend.STEREO)!!, 0.0001f)
-        assertEquals(0.0f, BlendMath.balanceFor(Blend.MONO)!!, 0.0001f)
-        assertEquals(0, BlendMath.monoFor(Blend.STEREO))
-        assertEquals(1, BlendMath.monoFor(Blend.MONO))
-    }
+    
 
     @Test
     fun `balance is clamped at both ends and at the ends exactly`() {
@@ -249,12 +240,7 @@ class BlendMathTest {
         assertEquals(0.0f, BlendMath.clampBalance(0f), 0.0001f)
     }
 
-    @Test
-    fun `swap is refused everywhere, not only in the maths`() {
-        // Guards against the failure where balanceFor returns null correctly and some caller
-        // treats null as "use the default" and pans to centre while reporting a swap.
-        assertTrue(Blend.values().count { BlendMath.balanceFor(it) == null } == 1)
-    }
+    
 }
 
 /**
@@ -467,7 +453,9 @@ class ChipTest {
     fun `a long label falls back to its first whole word, not a truncation`() {
         // "Wired headphones" -> "Wired", never "Wired hea…". §10: shorten by rule.
         assertEquals("Wired", Chip.short("Wired headphones"))
-        assertEquals("Phone", Chip.short("Phone speaker"))
+        // "Speaker" is short enough to survive whole now, which is half the reason for the
+        // rename: "Phone speaker" was being cut to "Phone", and the phone is the whole object.
+        assertEquals("Speaker", Chip.short("Speaker"))
     }
 
     @Test
@@ -499,50 +487,19 @@ class PatchBayTest {
         // The app's longest-standing lie: offering the earpiece as a music destination.
         assertEquals(
             Cell.BLOCKED,
-            PatchBay.cell(Path.MEDIA, AudioType.EARPIECE, routingWorks = true, isCurrent = false),
+            PatchBay.cell(AudioType.EARPIECE, routingWorks = true, isCurrent = false),
         )
         assertEquals(
             Cell.BLOCKED,
-            PatchBay.cell(Path.MEDIA, AudioType.EARPIECE, routingWorks = true, isCurrent = true),
+            PatchBay.cell(AudioType.EARPIECE, routingWorks = true, isCurrent = true),
         )
     }
 
-    @Test
-    fun `a call to an earpiece is the most ordinary connection there is`() {
-        assertEquals(
-            Cell.CONNECTABLE,
-            PatchBay.cell(Path.CALL, AudioType.EARPIECE, routingWorks = false, isCurrent = false),
-        )
-        assertEquals(
-            Cell.CONNECTED,
-            PatchBay.cell(Path.CALL, AudioType.EARPIECE, routingWorks = false, isCurrent = true),
-        )
-    }
+    
 
-    @Test
-    fun `calls do not need the routing privilege, media does`() {
-        // This is the whole asymmetry of the platform, in one pair of assertions.
-        assertEquals(
-            Cell.CONNECTABLE,
-            PatchBay.cell(Path.CALL, AudioType.SPEAKER, routingWorks = false, isCurrent = false),
-        )
-        assertEquals(
-            Cell.BLOCKED,
-            PatchBay.cell(Path.MEDIA, AudioType.SPEAKER, routingWorks = false, isCurrent = false),
-        )
-        assertEquals(
-            Cell.CONNECTABLE,
-            PatchBay.cell(Path.MEDIA, AudioType.SPEAKER, routingWorks = true, isCurrent = false),
-        )
-    }
+    
 
-    @Test
-    fun `HDMI takes music but never a phone call`() {
-        assertEquals(false, PatchBay.carriesCall(AudioType.HDMI))
-        assertEquals(false, PatchBay.carriesCall(AudioType.DOCK))
-        assertTrue(PatchBay.carriesCall(AudioType.BLUETOOTH_SCO))
-        assertTrue(PatchBay.carriesCall(AudioType.WIRED_HEADSET))
-    }
+    
 
     @Test
     fun `every cell state has a distinct mark, so colour is not the only channel`() {
@@ -552,12 +509,7 @@ class PatchBayTest {
         assertEquals("\u25CB", PatchBay.mark(Cell.CONNECTABLE))
     }
 
-    @Test
-    fun `the media row explains itself when it can go nowhere`() {
-        assertTrue(PatchBay.why(Path.MEDIA, routingWorks = false).contains("system switcher"))
-        assertEquals("media follows this app", PatchBay.why(Path.MEDIA, routingWorks = true))
-        assertEquals("calls follow this app", PatchBay.why(Path.CALL, routingWorks = false))
-    }
+    
 }
 
 /**

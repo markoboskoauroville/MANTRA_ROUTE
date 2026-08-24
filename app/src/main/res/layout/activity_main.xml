@@ -45,18 +45,94 @@
             android:layout_marginTop="20dp"
             android:textSize="14sp" />
 
-        <TextView
-            android:id="@+id/release_button"
+        
+
+        <!-- 2 x 2. §10 says never size a WORD by a fraction of the line; these are BOXES
+             sharing the width equally, and each box wraps its own text over as many lines as it
+             needs. minHeight keeps the four boxes the same size whatever the labels say. -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:background="@color/slate"
-            android:gravity="center"
-            android:paddingTop="14dp"
-            android:paddingBottom="14dp"
-            android:text="Fix call audio — give calls back to the system"
-            android:textColor="@color/amber"
-            android:textSize="15sp" />
+            android:layout_marginTop="16dp"
+            android:orientation="horizontal"
+            android:baselineAligned="false">
+
+            <TextView
+                android:id="@+id/notif_button"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@color/slate"
+                android:gravity="center"
+                android:minHeight="64dp"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
+                android:text="Show the panel"
+                android:textColor="@color/sand"
+                android:textSize="14sp" />
+
+            <View android:layout_width="10dp" android:layout_height="1dp" />
+
+            <TextView
+                android:id="@+id/probe_button"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@color/slate"
+                android:gravity="center"
+                android:minHeight="64dp"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
+                android:text="Probe this phone"
+                android:textColor="@color/amber"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal"
+            android:baselineAligned="false">
+
+            <TextView
+                android:id="@+id/copy_button"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@color/slate"
+                android:gravity="center"
+                android:minHeight="64dp"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
+                android:text="Copy the report"
+                android:textColor="@color/sand"
+                android:textSize="14sp" />
+
+            <View android:layout_width="10dp" android:layout_height="1dp" />
+
+            <TextView
+                android:id="@+id/release_button"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@color/slate"
+                android:gravity="center"
+                android:minHeight="64dp"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
+                android:text="Release call audio"
+                android:textColor="@color/sand"
+                android:textSize="14sp" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/call_audio_line"
@@ -67,43 +143,11 @@
             android:textSize="12sp"
             android:fontFamily="monospace" />
 
-        <TextView
-            android:id="@+id/notif_button"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:background="@color/slate"
-            android:gravity="center"
-            android:paddingTop="14dp"
-            android:paddingBottom="14dp"
-            android:textColor="@color/sand"
-            android:textSize="15sp" />
+        
 
-        <TextView
-            android:id="@+id/probe_button"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:background="@color/slate"
-            android:gravity="center"
-            android:paddingTop="14dp"
-            android:paddingBottom="14dp"
-            android:text="Probe this phone"
-            android:textColor="@color/amber"
-            android:textSize="15sp" />
+        
 
-        <TextView
-            android:id="@+id/copy_button"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:background="@color/slate"
-            android:gravity="center"
-            android:paddingTop="14dp"
-            android:paddingBottom="14dp"
-            android:text="Copy the report"
-            android:textColor="@color/sand"
-            android:textSize="15sp" />
+        
 
         <TextView
             android:layout_width="match_parent"

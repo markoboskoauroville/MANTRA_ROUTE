@@ -41,6 +41,22 @@
             </intent-filter>
         </activity>
 
+        <!-- The Quick Settings tile. TILE=false so it is not force-added; it is placed by
+             hand from the pencil / edit button in the Quick Settings panel. -->
+        <service
+            android:name=".MonoTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_notification"
+            android:label="Mono audio"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="false" />
+        </service>
+
         <receiver
             android:name=".RouteReceiver"
             android:exported="false">

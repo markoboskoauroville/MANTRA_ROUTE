@@ -134,7 +134,7 @@ object Outputs {
     fun labelFor(typeCode: Int, productName: String): String {
         val given = productName.trim()
         return when (typeCode) {
-            AudioType.SPEAKER -> "Phone speaker"
+            AudioType.SPEAKER -> "Speaker"
             AudioType.EARPIECE -> "Earpiece"
             AudioType.WIRED_HEADSET -> "Wired headset"
             AudioType.WIRED_HEADPHONES -> "Wired headphones"
@@ -204,7 +204,15 @@ object Outputs {
 }
 
 /** Stereo mode, as a closed set. design-language.md §6: exactly one in force, so a radio. */
-enum class Blend { STEREO, MONO, SWAPPED }
+/**
+ * Stereo or mono. SWAPPED was removed in v11.
+ *
+ * It probed ABSENT on the phone every time: no secure setting on this build exchanges channels,
+ * and a real swap needs to rewrite another app's PCM, which no non-system app can do. It sat on
+ * screen for three versions refusing every press. A control that can never work is not honesty,
+ * it is clutter that has to be read and dismissed every time.
+ */
+enum class Blend { STEREO, MONO }
 
 object BlendMath {
     /**
@@ -212,11 +220,7 @@ object BlendMath {
      * There is no secure setting that exchanges the channels, so SWAPPED cannot be expressed
      * here and must not pretend to be. It returns null and the caller must refuse.
      */
-    fun balanceFor(blend: Blend): Float? = when (blend) {
-        Blend.STEREO -> 0.0f
-        Blend.MONO -> 0.0f
-        Blend.SWAPPED -> null
-    }
+    fun balanceFor(): Float = 0.0f
 
     fun monoFor(blend: Blend): Int = if (blend == Blend.MONO) 1 else 0
 
@@ -387,7 +391,15 @@ object Chip {
  * Android has two independent routing paths, and conflating them is what made this app confusing
  * for six versions. They are separate rows here because they are separate in the platform.
  */
-enum class Path { MEDIA, CALL }
+/**
+ * One path. CALL was removed in v11.
+ *
+ * Reported from the phone: "I need to press the speaker icon during the call... the app is
+ * blocking it, it takes over." Exactly right. Holding the communication device is what stopped
+ * the phone's own speakerphone button from working, and the app had no business holding it.
+ * Android already gives you call routing during a call, in the dialer, and it works.
+ */
+enum class Path { MEDIA }
 
 enum class Cell {
     /** Carrying this path right now. */
@@ -422,22 +434,14 @@ object PatchBay {
      * music no matter which cell is pressed.
      */
     fun cell(
-        path: Path,
         typeCode: Int,
         routingWorks: Boolean,
         isCurrent: Boolean,
-    ): Cell = when (path) {
-        Path.CALL ->
-            if (!carriesCall(typeCode)) Cell.BLOCKED
-            else if (isCurrent) Cell.CONNECTED
-            else Cell.CONNECTABLE
-
-        Path.MEDIA ->
-            if (!Claim.carriesMedia(typeCode)) Cell.BLOCKED
-            else if (!routingWorks) Cell.BLOCKED
-            else if (isCurrent) Cell.CONNECTED
-            else Cell.CONNECTABLE
-    }
+    ): Cell =
+        if (!Claim.carriesMedia(typeCode)) Cell.BLOCKED
+        else if (!routingWorks) Cell.BLOCKED
+        else if (isCurrent) Cell.CONNECTED
+        else Cell.CONNECTABLE
 
     /** The mark drawn in the cell. §3: the shape carries it, colour reinforces it. */
     fun mark(cell: Cell): String = when (cell) {
@@ -450,11 +454,9 @@ object PatchBay {
      * One line explaining why a row can go nowhere, so the grid is not a wall of dots with no
      * account of itself.
      */
-    fun why(path: Path, routingWorks: Boolean): String = when {
-        path == Path.CALL -> "calls follow this app"
-        routingWorks -> "media follows this app"
-        else -> "media cannot be moved on this phone — use the system switcher"
-    }
+    fun why(routingWorks: Boolean): String =
+        if (routingWorks) "media follows this app"
+        else "media cannot be moved on this phone"
 }
 
 /**

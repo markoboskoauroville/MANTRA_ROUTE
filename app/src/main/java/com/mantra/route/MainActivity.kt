@@ -79,6 +79,10 @@ class MainActivity : AppCompatActivity() {
 
         state = State(this)
         router = Router(this)
+
+        // v7-v10 pinned the call route and left it pinned. Anyone upgrading arrives with the
+        // earpiece still held and no reason to know it. Let go before the screen is drawn.
+        router.releaseAnythingHeldAtStartup()
         watcher = OutputWatcher(this)
 
         shizukuLine = findViewById(R.id.shizuku_line)
@@ -454,7 +458,6 @@ class MainActivity : AppCompatActivity() {
         val caps = state.capabilities()
         val routingWorks = caps.anyRouting
         val rows = router.allRows()
-        val callKey = router.activeId()?.let { id -> rows.firstOrNull { it.id == id }?.key }
 
         patchHeaders.removeAllViews()
         rows.forEach { row ->
@@ -466,18 +469,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         patchRows.removeAllViews()
-        listOf(Path.MEDIA to "Media", Path.CALL to "Calls").forEach { (path, name) ->
+        listOf(Path.MEDIA to "Media").forEach { (path, name) ->
             val rowView = layoutInflater.inflate(R.layout.patch_row, patchRows, false)
             rowView.findViewById<TextView>(R.id.path_label).text = name
-            rowView.findViewById<TextView>(R.id.path_why).text = PatchBay.why(path, routingWorks)
+            rowView.findViewById<TextView>(R.id.path_why).text = PatchBay.why(routingWorks)
             val cells = rowView.findViewById<LinearLayout>(R.id.cells)
 
             rows.forEach { row ->
-                val isCurrent = when (path) {
-                    Path.CALL -> row.key == callKey
-                    Path.MEDIA -> routingWorks && row.key == state.lastSelectedKey
-                }
-                val cell = PatchBay.cell(path, row.typeCode, routingWorks, isCurrent)
+                val isCurrent = routingWorks && row.key == state.lastSelectedKey
+                val cell = PatchBay.cell(row.typeCode, routingWorks, isCurrent)
                 val view = layoutInflater.inflate(R.layout.patch_cell, cells, false) as TextView
                 view.text = PatchBay.mark(cell)
                 view.setTextColor(
@@ -494,8 +494,8 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     // Still tappable, but it explains itself instead of doing nothing silently.
                     view.setOnClickListener {
-                        patchLegend.text = if (path == Path.MEDIA && !Claim.carriesMedia(row.typeCode)) {
-                            "${row.label} cannot carry music — Android routes only calls there"
+                        patchLegend.text = if (!Claim.carriesMedia(row.typeCode)) {
+                            "${row.label} cannot carry music — Android sends only calls there"
                         } else {
                             "no routing privilege on this phone, so media cannot be patched"
                         }
@@ -510,10 +510,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun patch(path: Path, row: Row) {
-        val outcome = when (path) {
-            Path.CALL -> router.selectOutput(row.id, state.capabilities())
-            Path.MEDIA -> router.selectOutput(row.id, state.capabilities())
-        }
+        val outcome = router.selectOutput(row.id, state.capabilities())
         patchLegend.text = when (outcome) {
             is Router.Outcome.Moved -> "${row.label}: ${outcome.how}"
             is Router.Outcome.Partial -> "${row.label}: ${outcome.caveat}"
@@ -582,7 +579,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private companion object {
-        const val RELEASE_LABEL = "Fix call audio — give calls back to the system"
+        const val RELEASE_LABEL = "Release call audio"
         const val SHIZUKU_REQUEST = 7
     }
 }

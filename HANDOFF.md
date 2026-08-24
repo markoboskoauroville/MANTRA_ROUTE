@@ -466,3 +466,72 @@ test red.
 
 Call audio is still held until released by hand. The v9 report showed `held by this app:
 Earpiece`, meaning the speakerphone was still captive at the time it was taken.
+
+---
+
+## v11 — mostly removals
+
+Reported 24.8.2026, and the instruction was the right one: *"things which don't work, if it's
+not possible to fix, we remove them. They're just taking space."*
+
+### The app was blocking the speakerphone
+
+*"I need to press the speaker icon during the call... the app is blocking it, it takes over."*
+Exactly right, and worse than v7 understood. v7 added a release BUTTON. The real fault was that
+the app was taking the call route at all.
+
+`setCommunicationDevice` pins the call route system-wide and **outranks the dialer's own
+speakerphone button**. Media routing was the goal; the call path was never asked for. Taking it
+was collateral damage, and every tap on Earpiece re-took it.
+
+**Call routing is gone.** No `setCommunicationDevice` anywhere. Anything held by v7–v10 is
+released at startup, before the screen draws, because an upgrader arrives with the earpiece
+still pinned and no reason to know it.
+
+### Removed, each because its answer could never change
+
+    Swap L/R            ABSENT on every run. No secure setting exchanges channels
+    Calls row           the app has no business on the call path
+    MODIFY_AUDIO_ROUTING probe   signature|privileged, refused on every retail Android
+    cmd audio probe     service listed, no shell commands, on every run
+    cmd media_router    same
+    System switcher row reported as doing nothing on this phone
+
+Ten probes became six. A probe whose answer cannot change is not a measurement, it is a
+paragraph you re-read every time.
+
+### "A142" explained, and fixed
+
+`releaseCallAudio` printed `after.productName`, which for the earpiece is the phone's model
+code. Accurate value, meaningless sentence. It now prints the name, so the message reads
+*"could not let go of Earpiece."*
+
+### Names
+
+"Phone speaker" → **Speaker**. The phone is the whole object in your hand; the speaker and the
+earpiece are parts of it. It also stopped the chip being truncated to "Phone", which named the
+wrong thing entirely.
+
+### Icons
+
+Redrawn as Material Icons paths, matching the 24dp house style already used in TTT_MINI.
+Speaker is the loudspeaker glyph, Earpiece is the headphones glyph.
+
+### Quick Settings tile
+
+The panel at the top of the screen is **Quick Settings**; a button an app puts there is a
+**Quick Settings tile**. `MonoTileService` adds one, carrying the mono downmix — the control
+that measurably works and is worth one gesture. Not a launcher shortcut: the app is already in
+the launcher, and a tile that only opens an app has spent the most valuable strip of screen on
+nothing. It must be placed by hand from the pencil in Quick Settings.
+
+### Layout
+
+Four buttons became a 2×2 grid of equal boxes. §10 forbids sizing a WORD by a fraction of the
+line; these are boxes sharing width equally, each wrapping its own text, with a minHeight so all
+four stay the same size whatever the labels say.
+
+### Tests
+
+57 green, down from 64 — six tests deleted with the features they covered, and six updated for
+the rename. **A test kept alive for a deleted feature is dead code that passes.**

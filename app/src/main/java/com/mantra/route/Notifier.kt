@@ -100,17 +100,6 @@ object Notifier {
         release.setOnClickPendingIntent(R.id.row_root, releaseIntent(context))
         big.addView(R.id.rows, release)
 
-        // The escape hatch, promoted to a permanent row rather than a consolation prize shown
-        // only after a failure. On a phone that refuses MODIFY_AUDIO_ROUTING this is the ONLY
-        // control here that moves music, so it belongs in the list, not hidden behind an error.
-        val picker = RemoteViews(context.packageName, R.layout.notif_row)
-        picker.setTextViewText(R.id.label, "System output switcher…")
-        picker.setImageViewResource(R.id.glyph, R.drawable.ic_out_cast)
-        picker.setTextColor(R.id.label, SAND)
-        picker.setInt(R.id.glyph, "setColorFilter", SAND)
-        picker.setOnClickPendingIntent(R.id.row_root, pickerIntent(context))
-        big.addView(R.id.rows, picker)
-
         // The blend row. Exactly one is in force, so these behave as a radio: choosing one
         // visibly takes the mark off the last. §6.
         // §14: the object is the truth, the state is a claim about it. Reading state.blend
@@ -119,11 +108,9 @@ object Notifier {
         val blend = router.currentBlend()
         paintBlend(big, R.id.blend_stereo, blend == Blend.STEREO, true)
         paintBlend(big, R.id.blend_mono, blend == Blend.MONO, caps.works(Probe.MONO))
-        paintBlend(big, R.id.blend_swap, blend == Blend.SWAPPED, caps.works(Probe.SWAP))
 
         big.setOnClickPendingIntent(R.id.blend_stereo, blendIntent(context, Blend.STEREO))
         big.setOnClickPendingIntent(R.id.blend_mono, blendIntent(context, Blend.MONO))
-        big.setOnClickPendingIntent(R.id.blend_swap, blendIntent(context, Blend.SWAPPED))
 
         val headline = Claim.headline(Shell.isRunning(), Shell.hasPermission(), routingWorks)
         big.setTextViewText(R.id.title, headline)
@@ -178,11 +165,7 @@ object Notifier {
         releaseChip.setOnClickPendingIntent(R.id.chip, releaseIntent(context))
         collapsed.addView(R.id.chips, releaseChip)
 
-        val pickerChip = RemoteViews(context.packageName, R.layout.notif_chip)
-        pickerChip.setTextViewText(R.id.chip, "Switcher")
-        pickerChip.setTextColor(R.id.chip, SAND)
-        pickerChip.setOnClickPendingIntent(R.id.chip, pickerIntent(context))
-        collapsed.addView(R.id.chips, pickerChip)
+
 
         val notification = Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)

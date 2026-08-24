@@ -63,6 +63,14 @@ class Router(private val context: Context) {
      * An app that takes a system-wide resource must have a way to give it back, and that way
      * has to be reachable by the person, not only by the code path that took it.
      */
+    /**
+     * Called once at startup. Installs from v7-v10 may still be holding the earpiece, and the
+     * person has no reason to know that or to go looking for a button to fix it.
+     */
+    fun releaseAnythingHeldAtStartup() {
+        runCatching { if (audio.communicationDevice != null) audio.clearCommunicationDevice() }
+    }
+
     fun releaseCallAudio(): Outcome = try {
         val held = runCatching { audio.communicationDevice }.getOrNull()
         audio.clearCommunicationDevice()
@@ -71,7 +79,12 @@ class Router(private val context: Context) {
             held == null -> Outcome.Moved("nothing was held; calls already follow the system")
             after == null || after.id != held.id ->
                 Outcome.Moved("released — calls follow the system again")
-            else -> Outcome.Refused("the platform still reports ${after.productName} held")
+            // v10 printed after.productName here, which on this phone is the model code
+            // "A142" — an accurate value and a meaningless sentence.
+            else -> Outcome.Refused(
+                "could not let go of " +
+                    Outputs.labelFor(after.type, after.productName?.toString().orEmpty()),
+            )
         }
     } catch (t: Throwable) {
         Outcome.Refused("could not release: " + (t.cause ?: t))
@@ -187,16 +200,14 @@ class Router(private val context: Context) {
             }
         }
 
-        // Rung 3 — communication routing. Public API, no privilege, but it governs the call
-        // path rather than the media path. It is honest about that rather than claiming more.
-        val set = runCatching { audio.setCommunicationDevice(device) }.getOrDefault(false)
-        if (set) {
-            return Outcome.Partial(
-                "communication routing",
-                "calls and voice apps follow; music may not until a stronger rung is available",
-            )
-        }
-
+        // The communication rung was REMOVED in v11.
+        //
+        // setCommunicationDevice pins the call route system-wide and outranks the dialer's own
+        // speakerphone button. That is why the speakerphone stopped working: this app was
+        // holding it. Media routing was the goal; the call path was never asked for and taking
+        // it was pure collateral damage.
+        //
+        // Android already provides call routing during a call, in the dialer, and it works.
         return Outcome.Refused("nothing on this device would take the route")
     }
 
@@ -242,11 +253,6 @@ class Router(private val context: Context) {
     // ---- stereo, mono, swap ---------------------------------------------------------------
 
     fun applyBlend(blend: Blend, caps: Capabilities): Outcome {
-        if (blend == Blend.SWAPPED) {
-            return Outcome.Refused(
-                "no setting on this build exchanges the channels; balance can pan but not swap",
-            )
-        }
         if (!caps.works(Probe.MONO)) {
             return Outcome.Refused("master_mono is not writable from shell on this build")
         }
