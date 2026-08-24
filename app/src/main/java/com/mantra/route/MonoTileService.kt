@@ -40,10 +40,14 @@ class MonoTileService : TileService() {
             is Router.Outcome.Partial -> Unit
             is Router.Outcome.Refused -> {
                 // Refusing quietly would make the tile look broken. The subtitle says why.
-                qsTile?.apply {
-                    state = Tile.STATE_UNAVAILABLE
-                    subtitle = if (!Shell.isRunning()) "Shizuku not running" else "not permitted"
-                    updateTile()
+                // `this.state` inside apply{} resolved to the local `val state = State(this)`,
+                // not the Tile's property — the shadowing is invisible at a glance and the
+                // compiler message names the wrong thing. Addressed explicitly instead.
+                qsTile?.let { tile ->
+                    tile.state = Tile.STATE_UNAVAILABLE
+                    tile.subtitle =
+                        if (!Shell.isRunning()) "Shizuku not running" else "not permitted"
+                    tile.updateTile()
                 }
                 return
             }
