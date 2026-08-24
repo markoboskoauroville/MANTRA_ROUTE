@@ -412,3 +412,57 @@ The Media row cannot be exercised until a second media-capable output exists on 
 grid will show `○` in the Media row the moment headphones are connected AND a routing capability
 is measured; if it shows `·` with headphones connected, the proxy rung is genuinely unavailable
 and the capture-and-replay fork is the remaining option.
+
+---
+
+## v10 — volume, and the press that said nothing
+
+### The volume hole, which was a design fault not an oversight
+
+Reported: switching works, the sound is inaudibly quiet. **Android has no per-device volume.**
+There is no earpiece volume and no speaker volume. Volume is per STREAM, and the call path and
+the media path are different streams with separately remembered levels.
+
+So routing a call to the earpiece hands you `STREAM_VOICE_CALL` at whatever level it was last
+left at — possibly months ago. Nothing in this app ever displayed that number, let alone let it
+be changed. **The routing was visible and the gain was not**, and a correctly-routed inaudible
+call reads as a routing failure.
+
+Four sliders now: Call, Music, Ring, Alarm — each showing its real index out of its real range,
+not a percentage. A stream at or below 25% is drawn in red and marked `<-- LOW` in the report,
+because the whole point is to name it as a level rather than leave it looking like a dead route.
+
+`setStreamVolume` returns void and is routinely clamped on the call stream outside a call, so
+every set is read back, and falls through to `media volume --stream N --set M` over Shizuku when
+the direct call does not take.
+
+### The press that said nothing
+
+Reported: *"I press and there is no interaction... the copy button is interacting, so I know."*
+
+The copy button responded by accident — it happened to have something to say. Nothing else did.
+Now one rule, `press()`, applied to every control on the screen, on three channels at once
+because any single one can be missed:
+
+- the label becomes the RESULT and holds 2.2s, then returns to saying what the next press does
+- the button turns amber for that time
+- a haptic tick, which is the only channel that works when you are not looking at the screen
+
+`Feedback.resultLabel` never returns empty — a control that goes blank on press is the reported
+bug, and a test asserts it.
+
+### Also
+
+A **Centre the balance** button, which writes 0.0 and verifies. The v9 report showed balance
+sitting at 0.31 with no way to zero it except dragging.
+
+### Tests
+
+TEST 1: 64 green. Sabotages: truncating instead of rounding in `indexFor` (the slider stops one
+step short of maximum), and letting an empty result blank the button — each turned exactly one
+test red.
+
+### Still true
+
+Call audio is still held until released by hand. The v9 report showed `held by this app:
+Earpiece`, meaning the speakerphone was still captive at the time it was taken.

@@ -559,3 +559,78 @@ class PatchBayTest {
         assertEquals("calls follow this app", PatchBay.why(Path.CALL, routingWorks = false))
     }
 }
+
+/**
+ * Volume, per stream. The gap that made a correctly-routed call inaudible.
+ */
+class VolumeTest {
+
+    @Test
+    fun `the top of the slider reaches the top of the range`() {
+        // Truncation puts 99% at 4 of 5 and the slider can never reach maximum. Rounding fixes it.
+        assertEquals(5, Volume.indexFor(100, 5))
+        assertEquals(5, Volume.indexFor(99, 5))
+        assertEquals(15, Volume.indexFor(100, 15))
+    }
+
+    @Test
+    fun `both ends are exact`() {
+        assertEquals(0, Volume.indexFor(0, 15))
+        assertEquals(0, Volume.percentFor(0, 15))
+        assertEquals(100, Volume.percentFor(15, 15))
+    }
+
+    @Test
+    fun `a stream with no range does not divide by zero`() {
+        assertEquals(0, Volume.indexFor(50, 0))
+        assertEquals(0, Volume.percentFor(3, 0))
+        assertEquals("Call  unavailable", Volume.label("Call", 3, 0))
+        assertEquals(false, Volume.isLow(0, 0))
+    }
+
+    @Test
+    fun `out of range input is clamped, not wrapped`() {
+        assertEquals(15, Volume.indexFor(400, 15))
+        assertEquals(0, Volume.indexFor(-50, 15))
+    }
+
+    @Test
+    fun `the stuck-low case is flagged, because it reads as a routing failure`() {
+        assertTrue(Volume.isLow(1, 15))
+        assertTrue(Volume.isLow(0, 15))
+        assertEquals(false, Volume.isLow(8, 15))
+        // The boundary itself, both sides.
+        assertTrue(Volume.isLow(25, 100))
+        assertEquals(false, Volume.isLow(26, 100))
+    }
+
+    @Test
+    fun `the label states the real numbers, not a percentage`() {
+        assertEquals("Call  3 / 15", Volume.label("Call", 3, 15))
+    }
+
+    @Test
+    fun `the shell fallback names the stream by its platform id`() {
+        assertEquals("media volume --stream 0 --set 9", Volume.shellCommand(0, 9))
+    }
+}
+
+/** Press feedback. A control that goes blank on press is the bug being fixed. */
+class FeedbackTest {
+
+    @Test
+    fun `an empty result still says something`() {
+        assertEquals("Done", Feedback.resultLabel(""))
+        assertEquals("Done", Feedback.resultLabel("   "))
+    }
+
+    @Test
+    fun `a real message is passed through trimmed`() {
+        assertEquals("Centred", Feedback.resultLabel("  Centred  "))
+    }
+
+    @Test
+    fun `the hold is long enough to read and short enough not to feel stuck`() {
+        assertTrue(Feedback.HOLD_MS in 1200..4000)
+    }
+}

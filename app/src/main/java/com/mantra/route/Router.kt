@@ -98,6 +98,44 @@ class Router(private val context: Context) {
         }
     }
 
+    // ---- volume ----------------------------------------------------------------------------
+
+    fun volumeMax(streamId: Int): Int =
+        runCatching { audio.getStreamMaxVolume(streamId) }.getOrDefault(0)
+
+    fun volumeIndex(streamId: Int): Int =
+        runCatching { audio.getStreamVolume(streamId) }.getOrDefault(0)
+
+    /**
+     * Set a stream's level, then READ IT BACK.
+     *
+     * STREAM_VOICE_CALL is routinely clamped or ignored outside an active call, and
+     * setStreamVolume returns void — it reports nothing. Without the read-back this would be
+     * another control that looks like it worked. When the direct call does not take, the shell
+     * is tried, because uid 2000 is not subject to the same restriction.
+     */
+    fun setVolume(streamId: Int, index: Int, caps: Capabilities): Outcome {
+        val max = volumeMax(streamId)
+        if (max <= 0) return Outcome.Refused("this stream reports no range on this device")
+        val wanted = index.coerceIn(0, max)
+
+        runCatching { audio.setStreamVolume(streamId, wanted, 0) }
+        if (volumeIndex(streamId) == wanted) return Outcome.Moved("set to $wanted of $max")
+
+        if (!caps.works(Probe.SHELL)) {
+            return Outcome.Refused(
+                "the platform refused $wanted of $max and Shizuku is not available to force it",
+            )
+        }
+        Shell.run(Volume.shellCommand(streamId, wanted))
+        val after = volumeIndex(streamId)
+        return if (after == wanted) {
+            Outcome.Moved("set to $wanted of $max via shell")
+        } else {
+            Outcome.Refused("stayed at $after of $max — the call stream often locks outside a call")
+        }
+    }
+
     fun activeId(): Int? {
         val communication = runCatching { audio.communicationDevice?.id }.getOrNull()
         if (communication != null && outputs().any { it.id == communication }) return communication

@@ -40,6 +40,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var patchHeaders: LinearLayout
     private lateinit var patchRows: LinearLayout
     private lateinit var patchLegend: TextView
+    private lateinit var volumeRows: LinearLayout
+    private lateinit var balanceReset: TextView
     private lateinit var arrangeRows: LinearLayout
     private lateinit var arrangeReset: TextView
 
@@ -91,6 +93,8 @@ class MainActivity : AppCompatActivity() {
         patchHeaders = findViewById(R.id.patch_headers)
         patchRows = findViewById(R.id.patch_rows)
         patchLegend = findViewById(R.id.patch_legend)
+        volumeRows = findViewById(R.id.volume_rows)
+        balanceReset = findViewById(R.id.balance_reset)
         arrangeRows = findViewById(R.id.arrange_rows)
         arrangeReset = findViewById(R.id.arrange_reset)
 
@@ -111,15 +115,34 @@ class MainActivity : AppCompatActivity() {
         // The thing a person reaches for when the speakerphone has stopped working. It does not
         // depend on Shizuku, on a probe having been run, or on anything else being right.
         releaseButton.setOnClickListener {
-            val outcome = router.releaseCallAudio()
-            callAudioLine.text = when (outcome) {
-                is Router.Outcome.Moved -> outcome.how
-                is Router.Outcome.Partial -> outcome.caveat
-                is Router.Outcome.Refused -> outcome.why
+            press(releaseButton, RELEASE_LABEL) {
+                val outcome = router.releaseCallAudio()
+                state.lastSelectedKey = ""
+                Notifier.post(this)
+                callAudioLine.text = router.callAudioReport()
+                drawPatchBay()
+                when (outcome) {
+                    is Router.Outcome.Moved -> outcome.how
+                    is Router.Outcome.Partial -> outcome.caveat
+                    is Router.Outcome.Refused -> outcome.why
+                }
             }
-            state.lastSelectedKey = ""
-            Notifier.post(this)
-            redraw()
+        }
+
+        balanceReset.setOnClickListener {
+            press(balanceReset, "Centre the balance") {
+                val outcome = router.applyBalance(0f, state.capabilities())
+                when (outcome) {
+                    is Router.Outcome.Moved -> {
+                        state.balance = 0f
+                        balanceBar.progress = balanceToProgress(0f)
+                        balanceLine.text = "Centred"
+                        "Centred — balance is 0.0"
+                    }
+                    is Router.Outcome.Partial -> outcome.caveat
+                    is Router.Outcome.Refused -> outcome.why
+                }
+            }
         }
 
         // A screenshot of this screen scrolls off the bottom, and the detail column is the part
@@ -127,19 +150,23 @@ class MainActivity : AppCompatActivity() {
         // because the exception class was visible. So the whole thing goes to the clipboard as
         // text, in one press.
         copyButton.setOnClickListener {
-            val clipboard = getSystemService(android.content.ClipboardManager::class.java)
-            clipboard.setPrimaryClip(
-                android.content.ClipData.newPlainText("Mantra Route report", report())
-            )
-            copyButton.text = "Copied — paste it anywhere"
+            press(copyButton, "Copy the report") {
+                val clipboard = getSystemService(android.content.ClipboardManager::class.java)
+                clipboard.setPrimaryClip(
+                    android.content.ClipData.newPlainText("Mantra Route report", report())
+                )
+                "Copied — paste it anywhere"
+            }
         }
 
         notifButton.setOnClickListener {
             if (needsNotificationPermission()) {
                 askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
             } else {
-                Notifier.post(this)
-                redraw()
+                press(notifButton, "Show the switcher") {
+                    Notifier.post(this)
+                    "Panel posted — pull down the shade"
+                }
             }
         }
 
@@ -333,6 +360,7 @@ class MainActivity : AppCompatActivity() {
 
         callAudioLine.text = router.callAudioReport()
         drawPatchBay()
+        drawVolumes()
 
         notifButton.text =
             if (needsNotificationPermission()) "Allow notifications" else "Show the switcher"
@@ -344,6 +372,76 @@ class MainActivity : AppCompatActivity() {
             PackageManager.PERMISSION_GRANTED
 
     private fun color(id: Int) = ContextCompat.getColor(this, id)
+
+    /**
+     * The press rule, and it is the same rule for every control on this screen.
+     *
+     * Reported 23.8.2026: pressing Fix call audio and the reset produced no visible response, so
+     * there was no way to know the press had registered. The copy button did respond — but by
+     * accident, because it happened to have something to say.
+     *
+     * So: three channels at once, because any one of them can be missed. The label becomes the
+     * RESULT and holds long enough to read. The button flashes amber. The device gives a haptic
+     * tick, which is the only one that works when you are not looking at the screen.
+     */
+    private fun press(button: TextView, restingLabel: String, run: () -> String) {
+        button.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
+        val message = Feedback.resultLabel(run())
+        button.text = message
+        button.setTextColor(color(R.color.amber))
+        button.postDelayed({
+            button.text = restingLabel
+            button.setTextColor(color(R.color.sand))
+        }, Feedback.HOLD_MS)
+    }
+
+    /** Draw one slider per stream, each showing its actual index out of its actual range. */
+    private fun drawVolumes() {
+        val caps = state.capabilities()
+        volumeRows.removeAllViews()
+        Volume.STREAMS.forEach { stream ->
+            val view = layoutInflater.inflate(R.layout.volume_row, volumeRows, false)
+            val label = view.findViewById<TextView>(R.id.volume_label)
+            val bar = view.findViewById<SeekBar>(R.id.volume_bar)
+
+            val max = router.volumeMax(stream.id)
+            val index = router.volumeIndex(stream.id)
+            label.text = Volume.label(stream.label, index, max)
+            // The stuck-low case, named as a level rather than left to read as a dead route.
+            label.setTextColor(color(if (Volume.isLow(index, max)) R.color.fault else R.color.sand))
+            bar.progress = Volume.percentFor(index, max)
+            bar.isEnabled = max > 0
+
+            bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(b: SeekBar, p: Int, fromUser: Boolean) {
+                    if (fromUser) label.text = Volume.label(stream.label, Volume.indexFor(p, max), max)
+                }
+                override fun onStartTrackingTouch(b: SeekBar) = Unit
+                override fun onStopTrackingTouch(b: SeekBar) {
+                    b.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
+                    val wanted = Volume.indexFor(b.progress, max)
+                    val outcome = router.setVolume(stream.id, wanted, caps)
+                    val now = router.volumeIndex(stream.id)
+                    label.text = when (outcome) {
+                        is Router.Outcome.Moved -> Volume.label(stream.label, now, max)
+                        is Router.Outcome.Partial -> outcome.caveat
+                        is Router.Outcome.Refused -> outcome.why
+                    }
+                    label.setTextColor(
+                        color(
+                            when {
+                                outcome is Router.Outcome.Refused -> R.color.fault
+                                Volume.isLow(now, max) -> R.color.fault
+                                else -> R.color.amber
+                            }
+                        )
+                    )
+                    b.progress = Volume.percentFor(now, max)
+                }
+            })
+            volumeRows.addView(view)
+        }
+    }
 
     /**
      * Draw the crosspoint grid.
@@ -448,6 +546,15 @@ class MainActivity : AppCompatActivity() {
             builder.append('\n')
         }
 
+        builder.append("\nVOLUME\n")
+        Volume.STREAMS.forEach { st ->
+            val max = router.volumeMax(st.id)
+            val idx = router.volumeIndex(st.id)
+            builder.append("  ").append(Volume.label(st.label, idx, max))
+            if (Volume.isLow(idx, max)) builder.append("   <-- LOW")
+            builder.append('\n')
+        }
+
         builder.append("\nCALL AUDIO\n")
         builder.append(router.callAudioReport()).append('\n')
 
@@ -475,6 +582,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private companion object {
+        const val RELEASE_LABEL = "Fix call audio — give calls back to the system"
         const val SHIZUKU_REQUEST = 7
     }
 }

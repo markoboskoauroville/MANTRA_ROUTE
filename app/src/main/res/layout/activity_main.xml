@@ -109,6 +109,29 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
+            android:text="Volume"
+            android:textColor="@color/sand"
+            android:textSize="16sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Android has no per-speaker volume. Calls and music are separate streams with separate levels — a routed call can be inaudible because its stream is low."
+            android:textColor="@color/slate_ink"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:id="@+id/volume_rows"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="vertical" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
             android:text="Patch bay"
             android:textColor="@color/sand"
             android:textSize="16sp" />
@@ -213,6 +236,19 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:max="200" />
+
+        <TextView
+            android:id="@+id/balance_reset"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="@color/slate"
+            android:gravity="center"
+            android:paddingTop="14dp"
+            android:paddingBottom="14dp"
+            android:text="Centre the balance"
+            android:textColor="@color/sand"
+            android:textSize="15sp" />
 
         <TextView
             android:id="@+id/balance_line"

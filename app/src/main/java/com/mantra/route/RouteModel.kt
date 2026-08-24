@@ -456,3 +456,87 @@ object PatchBay {
         else -> "media cannot be moved on this phone — use the system switcher"
     }
 }
+
+/**
+ * Volume, per stream.
+ *
+ * Reported 23.8.2026: "switching works but the volume is stuck at some very low level."
+ * Correct, and it exposed a hole in the whole design. Android has no per-DEVICE volume. There
+ * is no "earpiece volume" and no "speaker volume". Volume is per STREAM, and the call path and
+ * the media path are different streams with separate, independently remembered levels.
+ *
+ * So switching the call route to the earpiece hands you STREAM_VOICE_CALL's level, which may
+ * not have been touched in months and sits wherever it was left. Nothing in this app ever
+ * showed it, let alone let it be changed. That is the bug: the routing was visible and the
+ * gain was not.
+ */
+data class Stream(val id: Int, val label: String)
+
+object Volume {
+
+    /** The four that matter here. IDs are the AudioManager STREAM_* constants. */
+    val STREAMS = listOf(
+        Stream(0, "Call"),
+        Stream(3, "Music"),
+        Stream(2, "Ring"),
+        Stream(4, "Alarm"),
+    )
+
+    /**
+     * Index from a slider percentage.
+     *
+     * Rounds rather than truncates: on a 5-step stream, truncation puts 99% at step 4 of 5 and
+     * the top of the slider never reaches the top of the range.
+     */
+    fun indexFor(percent: Int, max: Int): Int {
+        if (max <= 0) return 0
+        val clamped = percent.coerceIn(0, 100)
+        return Math.round(clamped * max / 100.0).toInt().coerceIn(0, max)
+    }
+
+    fun percentFor(index: Int, max: Int): Int {
+        if (max <= 0) return 0
+        return Math.round(index.coerceIn(0, max) * 100.0 / max).toInt()
+    }
+
+    fun label(name: String, index: Int, max: Int): String =
+        if (max <= 0) "$name  unavailable" else "$name  $index / $max"
+
+    /**
+     * Flag a stream sitting low enough to sound broken.
+     *
+     * This is the specific complaint: audio that is technically routed correctly and inaudible
+     * in practice reads as a routing failure. Naming it as a LEVEL is the fix.
+     */
+    fun isLow(index: Int, max: Int): Boolean = max > 0 && percentFor(index, max) <= 25
+
+    /** Shell fallback when setStreamVolume is clamped or refused outside a call. */
+    fun shellCommand(streamId: Int, index: Int): String =
+        "media volume --stream $streamId --set $index"
+}
+
+/**
+ * Press feedback.
+ *
+ * Reported 23.8.2026: "I press and there is no interaction, I must have signal I pressed the
+ * actual button. The copy button is interacting, so I know."
+ *
+ * Exactly right, and the copy button was an accident rather than a principle — it changed its
+ * own text because it had something to say. Every control here now does the same thing on the
+ * same rule: the label becomes the RESULT, holds long enough to be read, then returns to
+ * saying what the next press will do.
+ */
+object Feedback {
+
+    /** Long enough to read a short sentence without racing, short enough not to feel stuck. */
+    const val HOLD_MS = 2200L
+
+    /**
+     * The label to show immediately after a press.
+     *
+     * Never empty: a control that goes blank on press is the failure being complained about.
+     * If an action produced no message, say that it ran.
+     */
+    fun resultLabel(message: String, fallback: String = "Done"): String =
+        message.trim().ifEmpty { fallback }
+}
