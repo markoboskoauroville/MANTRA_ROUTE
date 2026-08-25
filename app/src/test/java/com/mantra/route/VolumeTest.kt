@@ -170,7 +170,7 @@ class VolumeMathTest {
     fun `a stream with no range does not divide by zero`() {
         assertEquals(0, Volume.indexFor(50, 0))
         assertEquals(0, Volume.percentFor(3, 0))
-        assertEquals("Call  unavailable", Volume.label("Call", 3, 0))
+        assertEquals("Call  unavailable", Volume.label("Call", 0))
         assertEquals(false, Volume.isLow(0, 0))
     }
 

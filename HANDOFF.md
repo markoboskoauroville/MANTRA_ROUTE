@@ -1201,3 +1201,35 @@ The new rule applied: one pass, 13 functions, 0 dead. Compare v30 to v32, where 
 code one function per version took three releases.
 
 TEST 1: 41 green.
+
+---
+
+## v34 — glyphs on the faders, and the number on the thumb
+
+Each row now carries the channel's glyph — the same Material Symbols already drawn on the tiles,
+in TTT_MINI's format — beside its name.
+
+**"12 / 16" is gone.** Those are the platform's steps, not anyone's units, and twelve of sixteen
+means nothing without doing the division. The percentage moved ONTO the thumb, which is where
+the finger and the eye already are; a number printed beside the slider makes the eye travel.
+
+`ThumbDrawable` is a Drawable rather than a View because a SeekBar's thumb is a Drawable —
+wrapping a TextView would have meant reimplementing the SeekBar. The number grows to fit by the
+same corner test the tile faces use, and it follows the finger on every pixel of the drag while
+the VOLUME is still only set on release: drawing a number is cheap, a system call per pixel is
+not.
+
+### A bug caught while wiring it
+
+The release handler set a refusal message on the label and THEN called `refreshVolumes()`, which
+promptly overwrote it with the channel name. The refusal would have flashed and vanished, which
+is indistinguishable from the slider having worked. Refresh first, then write the refusal over
+the top.
+
+### Kept where it earns its place
+
+The copied report still prints `Media  75%  (12/16)`. It is a diagnostic, and the raw steps are
+exactly the detail that explains why one stream can land on 25 and another cannot.
+
+G4 to a fixed point in one pass: 13 functions, 0 dead, 0 unreferenced drawables.
+TEST 1: 41 green.

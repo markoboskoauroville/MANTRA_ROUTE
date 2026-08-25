@@ -8,6 +8,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.view.HapticFeedbackConstants
 import android.view.View
+import android.util.TypedValue
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.SeekBar
@@ -30,7 +31,24 @@ class MainActivity : AppCompatActivity() {
     private lateinit var router: Router
     private lateinit var volumeRows: LinearLayout
 
-    private val rows = mutableListOf<Triple<Stream, TextView, SeekBar>>()
+    /** Stream, its name label, its slider, and the thumb that carries the number. */
+    private val rows = mutableListOf<Row>()
+
+    private data class Row(
+        val stream: Stream,
+        val label: TextView,
+        val bar: SeekBar,
+        val thumb: ThumbDrawable,
+    )
+
+    /** The glyph for each channel, matched to the one the system volume panel uses. */
+    private fun glyphFor(streamId: Int) = when (streamId) {
+        0 -> R.drawable.ic_stream_call
+        3 -> R.drawable.ic_stream_media
+        2 -> R.drawable.ic_stream_ring
+        5 -> R.drawable.ic_stream_notification
+        else -> R.drawable.ic_stream_alarm
+    }
 
     /**
      * Volume changes from the tiles, the hardware keys and the system panel, and none of them
@@ -90,14 +108,23 @@ class MainActivity : AppCompatActivity() {
             )
             val label = view.findViewById<TextView>(R.id.volume_label)
             val bar = view.findViewById<SeekBar>(R.id.volume_bar)
+            view.findViewById<ImageView>(R.id.volume_glyph).setImageResource(glyphFor(stream.id))
+
+            val thumbPx = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 56f, resources.displayMetrics,
+            ).toInt()
+            val thumb = ThumbDrawable(thumbPx)
+            bar.thumb = thumb
 
             bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(b: SeekBar, p: Int, fromUser: Boolean) {
                     // refreshVolumes() sets progress itself; without this guard every observer
                     // callback would redraw the label from a half-applied value.
+                    // The number follows the finger, so it updates on every pixel of the drag
+                    // rather than on release. Setting the VOLUME on every pixel would be a
+                    // system call per pixel; drawing a number is not.
                     if (!fromUser) return
-                    val max = router.volumeMax(stream.id)
-                    label.text = Volume.label(stream.label, Volume.indexFor(p, max), max)
+                    thumb.label = p.toString()
                 }
 
                 override fun onStartTrackingTouch(b: SeekBar) = Unit
@@ -107,31 +134,38 @@ class MainActivity : AppCompatActivity() {
                     b.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                     val max = router.volumeMax(stream.id)
                     val outcome = router.setVolume(stream.id, Volume.indexFor(b.progress, max))
+
+                    // Refresh FIRST, then write any refusal over the top of it. The other order
+                    // sets the message and then immediately overwrites it with the channel name
+                    // — the refusal would have flashed and vanished, which is indistinguishable
+                    // from the slider having worked.
+                    refreshVolumes()
                     if (outcome is Router.Outcome.Refused) {
                         label.text = outcome.why
                         label.setTextColor(color(R.color.fault))
                     }
-                    refreshVolumes()
-                    // NO BANNER HERE. The label under the thumb already says the number, and a
-                    // line across the top of the screen while you are dragging is covering the
-                    // thing you are looking at. The banner is for a tile press, where there is
-                    // nothing else to read.
+
+                    // The tiles cannot see this happen. Tell them.
                     TileNudge.all(this@MainActivity)
                 }
             })
             volumeRows.addView(view)
-            rows.add(Triple(stream, label, bar))
+            rows.add(Row(stream, label, bar, thumb))
         }
     }
 
     private fun refreshVolumes() {
-        rows.forEach { (stream, label, bar) ->
-            val max = router.volumeMax(stream.id)
-            val index = router.volumeIndex(stream.id)
-            label.text = Volume.label(stream.label, index, max)
-            label.setTextColor(color(if (Volume.isLow(index, max)) R.color.fault else R.color.sand))
-            bar.isEnabled = max > 0
-            bar.progress = Volume.percentFor(index, max)
+        rows.forEach { row ->
+            val max = router.volumeMax(row.stream.id)
+            val index = router.volumeIndex(row.stream.id)
+            val percent = Volume.percentFor(index, max)
+            row.label.text = Volume.label(row.stream.label, max)
+            row.label.setTextColor(
+                color(if (Volume.isLow(index, max)) R.color.fault else R.color.sand)
+            )
+            row.bar.isEnabled = max > 0
+            row.bar.progress = percent
+            row.thumb.label = if (max <= 0) "--" else percent.toString()
         }
     }
 

@@ -48,8 +48,15 @@ object Volume {
         return Math.round(index.coerceIn(0, max) * 100.0 / max).toInt()
     }
 
-    fun label(name: String, index: Int, max: Int): String =
-        if (max <= 0) "$name  unavailable" else "$name  $index / $max"
+    /**
+     * Just the name.
+     *
+     * "12 / 16" went with v34: those are the platform's steps, not anyone's units, and twelve
+     * of sixteen means nothing without doing the division. The percentage moved onto the thumb,
+     * where the finger and the eye already are.
+     */
+    fun label(name: String, max: Int): String =
+        if (max <= 0) "$name  unavailable" else name
 
     /** A stream low enough to sound broken. Named as a LEVEL so it does not read as a fault. */
     fun isLow(index: Int, max: Int): Boolean = max > 0 && percentFor(index, max) <= 25

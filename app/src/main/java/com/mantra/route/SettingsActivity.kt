@@ -129,7 +129,12 @@ class SettingsActivity : AppCompatActivity() {
             Volume.STREAMS.forEach { stream ->
                 val max = router.volumeMax(stream.id)
                 val index = router.volumeIndex(stream.id)
-                append("  ").append(Volume.label(stream.label, index, max))
+                // The report keeps the raw steps as well as the percentage: it is a
+                // diagnostic, and "12 of 16" is exactly the detail that explains why a stream
+                // cannot land on 25 when another can.
+                append("  ").append(stream.label)
+                    .append("  ").append(Volume.percentFor(index, max)).append('%')
+                    .append("  (").append(index).append('/').append(max).append(')')
                 if (Volume.isLow(index, max)) append("   <-- LOW")
                 append('\n')
             }

@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  One channel. The row is given a share of the screen by its parent, so the taller the phone
-  the taller the row and the easier the drag.
+  One channel: its glyph, its name, and a slider whose thumb carries the number.
+  The row is given a share of the screen by its parent, so the taller the phone the taller the
+  row and the easier the drag.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -9,21 +10,35 @@
     android:orientation="vertical"
     android:gravity="center_vertical">
 
-    <TextView
-        android:id="@+id/volume_label"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textColor="@color/sand"
-        android:textSize="20sp" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/volume_glyph"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:id="@+id/volume_label"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="12dp"
+            android:textColor="@color/sand"
+            android:textSize="20sp" />
+    </LinearLayout>
 
     <SeekBar
         android:id="@+id/volume_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="8dp"
         android:max="100"
         android:progressDrawable="@drawable/slider_track"
         android:splitTrack="false"
-        android:thumb="@drawable/slider_thumb"
         android:thumbOffset="0dp" />
 </LinearLayout>
