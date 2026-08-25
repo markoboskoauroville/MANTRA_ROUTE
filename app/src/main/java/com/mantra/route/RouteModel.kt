@@ -100,8 +100,14 @@ object Presets {
      */
     fun nextIndex(currentIndex: Int, max: Int): Int {
         if (max <= 0) return 0
-        val stops = LEVELS.map { Volume.indexFor(it, max) }.distinct().sorted()
+        val stops = stops(max)
         return stops.firstOrNull { it > currentIndex } ?: stops.first()
+    }
+
+    /** The steps this stream can actually reach, de-duplicated and in order. */
+    fun stops(max: Int): List<Int> {
+        if (max <= 0) return listOf(0)
+        return LEVELS.map { Volume.indexFor(it, max) }.distinct().sorted()
     }
 
     /**
@@ -137,6 +143,42 @@ object Presets {
 
     /** Full only at the top. The single state the tile paints. */
     fun isFull(percent: Int): Boolean = percent >= 100
+}
+
+/**
+ * Elevator logic: up to the top, then back down, then up again.
+ *
+ * Asked for on 25.8.2026. The wrapping cycle jumped from 100 straight to 25, which is the one
+ * move a volume control should never make — the step after the top of the range should be
+ * quiet, not silent-then-loud-again.
+ *
+ * Direction cannot be derived from the level alone: at 50, up and down are both legitimate and
+ * lead to different places. So direction is remembered, and at each end it REVERSES AND MOVES
+ * in the same press. Pressing at 100 gives 75, not another 100.
+ */
+data class Step(val index: Int, val goingUp: Boolean)
+
+object Elevator {
+
+    /**
+     * The next stop, and the direction to remember for the press after it.
+     *
+     * The current position is matched to the NEAREST stop rather than an exact one, because the
+     * level may have been changed from the system panel since the last press. Without that, a
+     * level sitting between two stops would match none and the tile would stall.
+     */
+    fun step(currentIndex: Int, max: Int, goingUp: Boolean): Step {
+        val stops = Presets.stops(max)
+        if (stops.size < 2) return Step(stops.firstOrNull() ?: 0, goingUp)
+
+        val pos = stops.indices.minByOrNull { Math.abs(stops[it] - currentIndex) } ?: 0
+        return when {
+            goingUp && pos == stops.lastIndex -> Step(stops[pos - 1], false)
+            goingUp -> Step(stops[pos + 1], true)
+            pos == 0 -> Step(stops[1], true)
+            else -> Step(stops[pos - 1], false)
+        }
+    }
 }
 
 object TileText {

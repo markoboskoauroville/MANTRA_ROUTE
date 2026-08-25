@@ -259,3 +259,79 @@ class FeedbackTest {
         assertTrue(Feedback.HOLD_MS in 1200..4000)
     }
 }
+
+/**
+ * Elevator logic. Up to the top, back down, up again — never a jump from loudest to quietest.
+ */
+class ElevatorTest {
+
+    /** Walk the tile the way a thumb does, returning the sequence of levels reached. */
+    private fun walk(max: Int, presses: Int, startAt: Int = 25): List<Int> {
+        var index = Volume.indexFor(startAt, max)
+        var up = true
+        return (1..presses).map {
+            val step = Elevator.step(index, max, up)
+            index = step.index; up = step.goingUp
+            Presets.snap(Volume.percentFor(index, max), max)
+        }
+    }
+
+    @Test
+    fun `it never jumps from the top straight to the bottom`() {
+        // The whole complaint: 100 followed by 25.
+        val seq = walk(16, 10)
+        seq.zipWithNext().forEach { (a, b) ->
+            assertTrue("jumped $a -> $b in $seq", !(a == 100 && b == 25))
+            assertTrue("jumped $a -> $b in $seq", !(a == 25 && b == 100))
+        }
+    }
+
+    @Test
+    fun `it goes up to the top then turns round`() {
+        assertEquals(listOf(50, 75, 100, 75, 50, 25, 50, 75), walk(16, 8))
+    }
+
+    @Test
+    fun `it turns round at the bottom too`() {
+        assertEquals(listOf(75, 50, 25, 50, 75, 100), walk(16, 6, startAt = 100).let {
+            // starting at 100 going "up" must reverse immediately
+            it
+        })
+    }
+
+    @Test
+    fun `pressing at an end moves, it does not stall`() {
+        // Reverse AND move in the same press. Reversing without moving would look like a dead
+        // tile, which is the failure this whole session keeps returning to.
+        val atTop = Elevator.step(Volume.indexFor(100, 16), 16, goingUp = true)
+        assertEquals(Volume.indexFor(75, 16), atTop.index)
+        assertEquals(false, atTop.goingUp)
+
+        val atBottom = Elevator.step(Volume.indexFor(25, 16), 16, goingUp = false)
+        assertEquals(Volume.indexFor(50, 16), atBottom.index)
+        assertTrue(atBottom.goingUp)
+    }
+
+    @Test
+    fun `a level set from the system panel is matched to the nearest stop, not ignored`() {
+        // 60% sits between 50 and 75. Requiring an exact match would stall the tile.
+        val step = Elevator.step(Volume.indexFor(60, 16), 16, goingUp = true)
+        assertEquals(Volume.indexFor(75, 16), step.index)
+    }
+
+    @Test
+    fun `the fifteen step call stream behaves the same`() {
+        assertEquals(listOf(50, 75, 100, 75, 50, 25), walk(15, 6))
+    }
+
+    @Test
+    fun `a stream with no range yields step zero rather than throwing`() {
+        assertEquals(0, Elevator.step(0, 0, true).index)
+        assertEquals(0, Elevator.step(3, -1, false).index)
+    }
+
+    @Test
+    fun `every stop is visited over a long walk`() {
+        assertEquals(setOf(25, 50, 75, 100), walk(16, 20).toSet())
+    }
+}

@@ -1,5 +1,6 @@
 package com.mantra.route
 
+import android.content.Context
 import android.graphics.drawable.Icon
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
@@ -22,6 +23,24 @@ abstract class VolumeTileService : TileService() {
 
     abstract val stream: Stream
 
+    /**
+     * Which way the elevator is travelling, per stream.
+     *
+     * It cannot be derived from the level: at 50, up and down are both legitimate. It is the
+     * only thing this app persists, it is one boolean, and if it is ever lost the tile simply
+     * starts going up again — a wrong guess that corrects itself on the next press.
+     */
+    private fun goingUp(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(key(), true)
+
+    private fun setGoingUp(context: Context, up: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean(key(), up).apply()
+    }
+
+    private fun key() = "up_" + stream.id
+
     override fun onStartListening() {
         super.onStartListening()
         paint()
@@ -39,10 +58,11 @@ abstract class VolumeTileService : TileService() {
         // presets, and cycling on percentages leaves such a stream stuck on one level with
         // every press appearing to work.
         val currentIndex = router.volumeIndex(stream.id)
-        val wantedIndex = Presets.nextIndex(currentIndex, max)
+        val step = Elevator.step(currentIndex, max, goingUp(this))
 
-        when (val outcome = router.setVolume(stream.id, wantedIndex)) {
+        when (val outcome = router.setVolume(stream.id, step.index)) {
             is Router.Outcome.Moved -> {
+                setGoingUp(this, step.goingUp)
                 paint()
                 // Say what the phone ended up at, not what was asked for. On a stream that
                 // cannot land exactly on a preset the two differ, and the bubble must report
@@ -88,6 +108,8 @@ abstract class VolumeTileService : TileService() {
         tile.updateTile()
     }
 }
+
+private const val PREFS = "mantra_route_tiles"
 
 /** Five tiles, one per stream. Android requires a distinct class for each. */
 class CallVolumeTileService : VolumeTileService() {

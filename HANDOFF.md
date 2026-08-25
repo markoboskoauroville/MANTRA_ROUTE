@@ -1007,3 +1007,50 @@ fixing something else. That is now four for four across two runs. **A multi-line
 source is a demolition tool, and it has now cost more than it has saved.**
 
 TEST 1: 28 green, which is 41 minus the 13 meter tests. Fuzzer 400,000 iterations, 0 faults.
+
+---
+
+## v24 — one text size for every tile, and elevator logic
+
+### RI was 26% larger, and it was measured not guessed
+
+Reported as "RI is more fat than the others". It was. Each face grew independently until it hit
+the edge, so `RI1` reached **93px** while `ME1` reached **74px** — "I" is a narrow glyph, the
+string is shorter, and it had further to grow before the limit. Five tiles in a row, one visibly
+fatter, and nothing about the volume to explain it.
+
+Now the size is computed ONCE across all twenty faces the app can draw, and faces that are
+naturally too wide at that size are **condensed horizontally** rather than shrunk. Condensing
+keeps the cap height and stroke weight identical, which is what the eye reads as "the same
+size"; shrinking would have matched them by making every tile as small as the widest.
+
+The squeeze is capped at 10%. Two candidate sizes were rendered side by side and looked at —
+74 with no squeeze, and 83 with 9% — and 83 is both fatter and still undistorted. **Chosen by
+looking, because "does this read as squashed" is not a question arithmetic answers.**
+
+### Elevator logic
+
+25 → 50 → 75 → 100 → 75 → 50 → 25 → 50. The wrapping cycle jumped from 100 straight to 25,
+which is the one move a volume control should never make.
+
+**Direction cannot be derived from the level**: at 50, up and down are both legitimate and lead
+to different places. So it is remembered — one boolean per stream, and the only thing this app
+persists. If it is ever lost the tile starts going up again, a wrong guess that corrects itself
+on the next press.
+
+At each end the direction **reverses and moves in the same press**. Reversing without moving
+would leave a tile that looks dead at 100, which is the failure this session keeps returning to.
+
+The current level is matched to the NEAREST stop, not an exact one, because the volume may have
+been changed from the system panel since the last press. Requiring an exact match stalls the
+tile — one of the two sabotages proves it.
+
+### Tests
+
+36 green. Fuzzed with **800,000 simulated presses** across ten stream ranges: never stalled,
+never landed off a stop. Sabotages: reversing without moving, and requiring an exact stop match
+— together they turned five of the eight elevator tests red.
+
+**G8 note:** this version introduces the first persisted state since v18. It is one boolean per
+stream under `mantra_route_tiles`. Nothing reads it but the tile, a missing value means "up",
+and a corrupt value cannot be corrupt — `getBoolean` has a default.
