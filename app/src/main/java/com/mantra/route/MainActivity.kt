@@ -1,8 +1,6 @@
 package com.mantra.route
 
-import android.Manifest
 import android.app.NotificationManager
-import android.content.pm.PackageManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
@@ -11,11 +9,9 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.HapticFeedbackConstants
 import android.view.View
-import android.widget.CheckBox
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
@@ -38,21 +34,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var volumeRows: LinearLayout
     private lateinit var dndButton: TextView
     private lateinit var copyButton: TextView
-    private lateinit var vu: VuView
-    private lateinit var vuLine: TextView
-    private lateinit var normalizeButton: TextView
-    private lateinit var boostCheck: CheckBox
 
-    private val meter = OutputMeter()
 
-    /** Gain currently applied, so the checkbox can put it back without measuring again. */
-    private var lastGainMb = 0
 
-    private val askMicrophone =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) startMeter() else vuLine.text =
-                "the meter needs the microphone permission to read the output mix"
-        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -74,34 +58,10 @@ class MainActivity : AppCompatActivity() {
         volumeRows = findViewById(R.id.volume_rows)
         dndButton = findViewById(R.id.dnd_button)
         copyButton = findViewById(R.id.copy_button)
-        vu = findViewById(R.id.vu)
-        vuLine = findViewById(R.id.vu_line)
-        normalizeButton = findViewById(R.id.normalize_button)
-        boostCheck = findViewById(R.id.boost_check)
         findViewById<TextView>(R.id.version).text = "v" + BuildConfig.VERSION_NAME
 
-        vu.source = { meter.peakDb }
 
-        normalizeButton.setOnClickListener {
-            press(normalizeButton, "Normalize") { normalize() }
-        }
 
-        // The checkbox does not measure. It puts back, or takes away, the gain normalise found.
-        // Unticking it must be instant and total, because the reason to untick it is that the
-        // room just got too loud.
-        boostCheck.setOnCheckedChangeListener { _, checked ->
-            if (checked && lastGainMb <= 0) {
-                boostCheck.isChecked = false
-                vuLine.text = "press Normalize first — there is no measured gain to apply"
-            } else {
-                val failure = meter.setGainMb(if (checked) lastGainMb else 0)
-                vuLine.text = when {
-                    failure != null -> failure
-                    checked -> "boost on, " + Normalize.describe(lastGainMb)
-                    else -> "boost off"
-                }
-            }
-        }
 
         dndButton.setOnClickListener {
             press(dndButton, "Do Not Disturb access") {
@@ -132,94 +92,12 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         drawVolumes()
-        // If the screen was left mid-measurement the watcher may never have run again, and the
-        // button would stay disabled for the life of the process. Re-enabling on every resume
-        // costs nothing and closes that.
-        normalizeButton.isEnabled = true
-        if (hasMicrophone()) startMeter() else {
-            vuLine.text = "tap Normalize to let the meter read the output mix"
-        }
     }
 
-    /**
-     * The Visualizer holds a capture of the global mix. Letting it run while the screen is not
-     * in front of anyone keeps that capture open for no reason, and Android may refuse it in the
-     * background anyway.
-     */
-    override fun onPause() {
-        super.onPause()
-        meter.release()
-    }
 
-    private fun hasMicrophone(): Boolean =
-        ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
-            PackageManager.PERMISSION_GRANTED
 
-    private fun startMeter() {
-        if (meter.start()) {
-            vuLine.text = "reading the output mix"
-        } else {
-            // A dead meter and a silent room look identical, so the reason goes on the screen.
-            vuLine.text = meter.lastError ?: "this build refuses to meter the output mix"
-        }
-    }
 
-    /**
-     * Measure the loudest moment over a short window, then make up the difference.
-     *
-     * A single instant is not a peak — it is whatever happened in one 40ms frame, which on a
-     * quiet passage is silence and would ask for twenty decibels of gain. So it watches for a
-     * while and keeps the highest.
-     */
-    private fun normalize(): String {
-        if (!hasMicrophone()) {
-            askMicrophone.launch(Manifest.permission.RECORD_AUDIO)
-            return "asking for the microphone, for the meter"
-        }
-        if (!meter.isMetering && !meter.start()) {
-            return meter.lastError ?: "cannot read the output mix on this build"
-        }
 
-        normalizeButton.isEnabled = false
-        var highest = Meter.FLOOR_DB
-        val started = System.currentTimeMillis()
-        val watcher = object : Runnable {
-            override fun run() {
-                highest = maxOf(highest, meter.peakDb)
-                if (System.currentTimeMillis() - started < WATCH_MS) {
-                    vu.postDelayed(this, 40L)
-                } else {
-                    normalizeButton.isEnabled = true
-                    finishNormalize(highest)
-                }
-            }
-        }
-        vu.post(watcher)
-        return "listening…"
-    }
-
-    private fun finishNormalize(peakDb: Float) {
-        if (!Normalize.hasSignal(peakDb)) {
-            vuLine.text = "nothing playing to measure — start the audio, then Normalize"
-            return
-        }
-        lastGainMb = Normalize.gainMb(peakDb)
-        if (lastGainMb <= 0) {
-            boostCheck.isChecked = false
-            vuLine.text = "peak " + String.format("%.1f", peakDb) + " dB — already at full level"
-            return
-        }
-        val failure = meter.setGainMb(lastGainMb)
-        if (failure != null) {
-            boostCheck.isChecked = false
-            vuLine.text = failure
-            return
-        }
-        // Ticked because a gain was found AND applied. The checkbox reports a fact, it does not
-        // announce an intention.
-        boostCheck.isChecked = true
-        vuLine.text = "peak " + String.format("%.1f", peakDb) + " dB — " + Normalize.describe(lastGainMb)
-    }
 
     /**
      * The press rule, the same for every control.
@@ -294,10 +172,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun color(id: Int) = ContextCompat.getColor(this, id)
 
-    private companion object {
-        /** Long enough for a loud moment to arrive, short enough not to feel stuck. */
-        const val WATCH_MS = 2500L
-    }
 
     /** The screen as plain text, for pasting. */
     private fun report(): String = buildString {

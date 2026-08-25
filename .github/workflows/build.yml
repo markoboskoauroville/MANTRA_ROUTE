@@ -76,6 +76,27 @@ jobs:
             exit 1
           fi
 
+      # A custom View written into a layout is inflated by reflection through
+      # (Context, AttributeSet). A class with only (Context) compiles, passes lint, packages
+      # and then throws InflateException at setContentView — the app dies before it draws.
+      # That shipped in v20 and made the app unlaunchable. No other gate sees it.
+      - name: G4b — every custom view in a layout can actually be inflated
+        run: |
+          FAIL=0; CHECKED=0
+          for CLASS in $(grep -rhoE '<com\.mantra\.route\.[A-Za-z0-9_]+' app/src/main/res/layout | sed 's/<com\.mantra\.route\.//' | sort -u); do
+            CHECKED=$((CHECKED+1))
+            F=$(find app/src/main/java -name "$CLASS.kt")
+            if [ -z "$F" ]; then echo "  $CLASS: used in a layout, class not found"; FAIL=1; continue; fi
+            if grep -qE "AttributeSet" "$F"; then
+              echo "  $CLASS: ok, takes an AttributeSet"
+            else
+              echo "  $CLASS: NO (Context, AttributeSet) CONSTRUCTOR — will throw InflateException"
+              FAIL=1
+            fi
+          done
+          echo "G4b: $CHECKED custom views in layouts checked"
+          if [ "$FAIL" -ne 0 ]; then echo "G4b BLOCKS: a layout names a view that cannot be inflated"; exit 1; fi
+
       - name: Assemble
         env:
           MANTRA_KEYSTORE: ${{ steps.ks.outputs.have == 'true' && format('{0}/mantra_route.jks', runner.temp) || '' }}

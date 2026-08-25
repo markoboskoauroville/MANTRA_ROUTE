@@ -186,52 +186,6 @@ object Feedback {
 }
 
 /**
- * The VU meter's numbers, ported from TTT Mini's `MaVuView`.
- *
- * Ported, not re-invented: the dB conversion, the floor, the asymmetric smoothing, the peak
- * decay and the three colours are his, unchanged. Two meters that merely look similar would
- * disagree about how loud something is; this one reads the same way his keyboard's does.
- */
-object Meter {
-
-    const val FLOOR_DB = -54f
-
-    /** Sand, for the peak mark. */
-    const val PEAK_INK = 0xFFF2DDB4.toInt()
-
-    /** The track the bar runs in. */
-    const val TRACK = 0xFF2A2A2E.toInt()
-
-    fun toDb(level: Float): Float {
-        val v = kotlin.math.abs(level)
-        if (v <= 0.0005f) return FLOOR_DB
-        return (20.0 * kotlin.math.log10(v.toDouble())).toFloat().coerceIn(FLOOR_DB, 0f)
-    }
-
-    fun norm(db: Float): Float = ((db - FLOOR_DB) / (0f - FLOOR_DB)).coerceIn(0f, 1f)
-
-    /** Green while there is headroom, amber approaching, red at the top. */
-    fun colourFor(db: Float): Int = when {
-        db > -3f -> 0xFF9B3B33.toInt()
-        db > -12f -> 0xFFF0883E.toInt()
-        else -> 0xFF56D364.toInt()
-    }
-
-    /**
-     * Fast to rise, slow to fall.
-     *
-     * An attack that lags makes the meter feel dead; a release that snaps makes it feel nervous.
-     * The same asymmetry every hardware meter has.
-     */
-    fun smooth(previous: Float, now: Float): Float =
-        if (now > previous) now else previous + (now - previous) * 0.3f
-
-    /** The peak mark falls slowly enough to read and fast enough to follow a phrase. */
-    fun decayPeak(previous: Float, now: Float): Float =
-        if (now > previous) now else (previous - 0.6f).coerceAtLeast(FLOOR_DB)
-}
-
-/**
  * Normalise: measure how far the loudest moment falls short of full scale, and make up the
  * difference with gain.
  *

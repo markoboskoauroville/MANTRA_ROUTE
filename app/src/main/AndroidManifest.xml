@@ -15,18 +15,6 @@
     -->
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 
-    <!--
-      RECORD_AUDIO is here for the VU METER, and for nothing else.
-
-      A meter of the system output reads it through Visualizer on the global session, and
-      Android guards that with the microphone permission because the same API could be pointed
-      at a microphone. This app never opens one, never records and never writes audio anywhere;
-      the only consumer is the peak number the bar is drawn from.
-
-      It is worth being blunt about, because "an audio app wants the microphone" is exactly the
-      request a person should be suspicious of.
-    -->
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Without this the platform reports Bluetooth outputs with an empty name and address,
          which is what turns two pairs of earbuds into one unnameable row. -->
 
