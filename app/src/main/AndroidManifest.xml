@@ -82,6 +82,11 @@
         <!-- Five Quick Settings tiles, one per stream, each cycling 25 / 50 / 75 / 100.
              The android:icon here is only what the PICKER shows while choosing; the live
              tile draws its own face as a bitmap. -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:label="Mantra Route" />
+
         <service
             android:name=".CallVolumeTileService"
             android:exported="true"

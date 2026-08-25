@@ -215,6 +215,10 @@ object TileText {
     fun face(name: String, percent: Int, max: Int): String =
         if (max <= 0) one(name) + "--" else one(name) + Presets.snap(percent, max)
 
+    /** The number line of the tile face, on its own. */
+    fun level(percent: Int, max: Int): String =
+        if (max <= 0) "--" else Presets.snap(percent, max).toString()
+
     /** The label, where a panel shows one. */
     fun label(name: String, percent: Int, max: Int): String =
         if (max <= 0) "$name unavailable" else "$name ${Presets.snap(percent, max)}%"
