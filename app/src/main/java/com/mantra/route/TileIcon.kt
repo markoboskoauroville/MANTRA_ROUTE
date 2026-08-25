@@ -34,9 +34,15 @@ object TileIcon {
 
     private val cache = HashMap<String, Bitmap>()
 
-    /** Every face this app can draw: five channels by four levels. */
+    /**
+     * The widest face each channel can ever produce.
+     *
+     * The level is now a real percentage, so a channel's widest face is its two letters plus
+     * "100" — five characters. Sizing against the four presets alone would have left every tile
+     * too large the moment the slider landed on a three-digit number.
+     */
     private val allFaces: List<String> by lazy {
-        Volume.STREAMS.flatMap { s -> Presets.LEVELS.map { TileText.two(s.label) + Presets.digit(it) } }
+        Volume.STREAMS.map { TileText.one(it.label) + "100" }
     }
 
     /**

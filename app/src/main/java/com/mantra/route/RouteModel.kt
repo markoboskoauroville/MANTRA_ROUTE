@@ -126,21 +126,6 @@ object Presets {
         return LEVELS.firstOrNull { Math.abs(percent - it) <= halfStep } ?: percent
     }
 
-    /**
-     * One character for the level, because a whole line has to hold two letters AND a number.
-     *
-     * 25 is "2", 50 is "5", 75 is "7", and 100 is "1" — the leading digit in every case.
-     *
-     * "1" therefore means 100 and could also mean 10-something. That collision is real and is
-     * resolved by COLOUR: the tile is only ever white at 100, so a dark "1" is a tenth and a
-     * white "1" is full. It is the one thing colour is spent on here.
-     */
-    fun digit(percent: Int): String = when {
-        percent >= 100 -> "1"
-        percent >= 10 -> (percent / 10).toString()
-        else -> "0"
-    }
-
     /** Full only at the top. The single state the tile paints. */
     fun isFull(percent: Int): Boolean = percent >= 100
 }
@@ -163,20 +148,31 @@ object Elevator {
     /**
      * The next stop, and the direction to remember for the press after it.
      *
-     * The current position is matched to the NEAREST stop rather than an exact one, because the
-     * level may have been changed from the system panel since the last press. Without that, a
-     * level sitting between two stops would match none and the tile would stall.
+     * Steps in the DIRECTION OF TRAVEL from wherever the level actually is, rather than
+     * snapping to the nearest stop and stepping from there. The difference shows at the edges,
+     * and both cases were wrong before:
+     *
+     *   from silence, going up   -> 25, the first stop above. Snapping first made it 50,
+     *                               because the nearest stop to zero is 25 and it stepped past
+     *   from 94%, going up       -> 100. Snapping first made it turn round and go DOWN to 75,
+     *                               because the nearest stop to 94% is 100 and it read as
+     *                               already being at the top
+     *
+     * Only when there is no stop left in the current direction does it reverse — and then it
+     * reverses AND moves in the same press, because a tile that changes nothing looks dead.
      */
     fun step(currentIndex: Int, max: Int, goingUp: Boolean): Step {
         val stops = Presets.stops(max)
         if (stops.size < 2) return Step(stops.firstOrNull() ?: 0, goingUp)
 
-        val pos = stops.indices.minByOrNull { Math.abs(stops[it] - currentIndex) } ?: 0
-        return when {
-            goingUp && pos == stops.lastIndex -> Step(stops[pos - 1], false)
-            goingUp -> Step(stops[pos + 1], true)
-            pos == 0 -> Step(stops[1], true)
-            else -> Step(stops[pos - 1], false)
+        return if (goingUp) {
+            val up = stops.firstOrNull { it > currentIndex }
+            if (up != null) Step(up, true)
+            else Step(stops.last { it < currentIndex }, false)
+        } else {
+            val down = stops.lastOrNull { it < currentIndex }
+            if (down != null) Step(down, false)
+            else Step(stops.first { it > currentIndex }, true)
         }
     }
 }
@@ -184,26 +180,40 @@ object Elevator {
 object TileText {
 
     /**
-     * TWO letters, not four.
+     * ONE letter, because the five channels happen to start with five different letters.
      *
-     * The face is one line now and the level's digit has to share it, so the name gets two
-     * characters and the digit gets one. Two is enough to tell five channels apart when they
-     * are the only five there are.
+     * C, M, R, N, A — Call, Media, Ring, Notification, Alarm. No two collide, so the second
+     * letter was carrying no information at all. Dropping it takes the widest face from five
+     * characters to four, and since every face is sized to the widest, every face gets larger.
+     *
+     * This only works because there are exactly these five. A sixth channel starting with C
+     * would break it, and the test asserts the five are distinct so that would fail loudly
+     * rather than silently showing two tiles the same.
      */
-    private val TWO = mapOf(
-        "Call" to "CA",
-        "Media" to "ME",
-        "Ring" to "RI",
-        "Notification" to "NO",
-        "Alarm" to "AL",
+    private val ONE = mapOf(
+        "Call" to "C",
+        "Media" to "M",
+        "Ring" to "R",
+        "Notification" to "N",
+        "Alarm" to "A",
     )
 
-    fun two(name: String): String =
-        TWO[name] ?: name.filter { it.isLetter() }.take(2).uppercase().ifEmpty { "--" }
+    fun one(name: String): String =
+        ONE[name] ?: name.filter { it.isLetter() }.take(1).uppercase().ifEmpty { "-" }
 
-    /** The whole face: two letters and one digit, on one line. */
+    /**
+     * The whole face: two letters and the real percentage, on one line.
+     *
+     * v26 replaced the single leading digit. One character could not tell 10% from 100%, and
+     * once the face began following the app's sliders rather than only the four presets, a
+     * digit was showing "6" for anything from 60 to 69. The number is the thing being read;
+     * it should be the number.
+     *
+     * Width is the cost of a real number, which is why the channel dropped to a single letter
+     * in the same version: "M100" is four characters where "ME100" was five.
+     */
     fun face(name: String, percent: Int, max: Int): String =
-        if (max <= 0) two(name) + "-" else two(name) + Presets.digit(Presets.snap(percent, max))
+        if (max <= 0) one(name) + "--" else one(name) + Presets.snap(percent, max)
 
     /** The label, where a panel shows one. */
     fun label(name: String, percent: Int, max: Int): String =
@@ -218,6 +228,14 @@ object TileText {
     fun spoken(name: String, percent: Int, max: Int): String =
         if (max <= 0) "$name has no volume range on this phone"
         else "$name ${Presets.snap(percent, max)}%"
+
+    /**
+     * The banner line, in capitals, kept short because it is drawn as large as the screen
+     * allows and every extra character costs height.
+     */
+    fun banner(name: String, percent: Int, max: Int): String =
+        if (max <= 0) name.uppercase() + "  NO RANGE"
+        else name.uppercase() + "  " + Presets.snap(percent, max) + "%"
 }
 
 /** A control that goes blank on press is the bug this exists to prevent. */

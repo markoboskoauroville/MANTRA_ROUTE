@@ -6,6 +6,9 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.view.HapticFeedbackConstants
 import android.view.View
@@ -32,8 +35,24 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var router: Router
     private lateinit var volumeRows: LinearLayout
+
+    /** One row per stream, built once and then refreshed in place. */
+    private val rows = mutableListOf<Triple<Stream, TextView, SeekBar>>()
+
+    /**
+     * Volume can change from anywhere — the tiles, the hardware keys, the system panel — and
+     * none of those tell this screen. Reading only in onResume meant a change made in Quick
+     * Settings never reached an open app at all, because pulling the shade down does not pause
+     * the activity underneath it.
+     *
+     * The settings table is the one place every one of those routes writes to.
+     */
+    private val volumeWatcher = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) = refreshVolumes()
+    }
     private lateinit var dndButton: TextView
     private lateinit var copyButton: TextView
+    private lateinit var bannerButton: TextView
 
 
 
@@ -58,10 +77,13 @@ class MainActivity : AppCompatActivity() {
         volumeRows = findViewById(R.id.volume_rows)
         dndButton = findViewById(R.id.dnd_button)
         copyButton = findViewById(R.id.copy_button)
+        bannerButton = findViewById(R.id.banner_button)
         findViewById<TextView>(R.id.version).text = "v" + BuildConfig.VERSION_NAME
 
 
 
+
+        buildVolumeRows()
 
         dndButton.setOnClickListener {
             press(dndButton, "Do Not Disturb access") {
@@ -80,6 +102,18 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        bannerButton.setOnClickListener {
+            press(bannerButton, "Top banner") {
+                if (StatusBanner.canShow(this)) {
+                    StatusBanner.show(this, "MANTRA ROUTE  READY")
+                    "Already allowed — that line is the banner"
+                } else {
+                    startActivity(StatusBanner.overlaySettings(this))
+                    "Allow Mantra Route to display over other apps"
+                }
+            }
+        }
+
         copyButton.setOnClickListener {
             press(copyButton, "Copy the report") {
                 getSystemService(ClipboardManager::class.java)
@@ -91,7 +125,15 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        drawVolumes()
+        contentResolver.registerContentObserver(
+            Settings.System.CONTENT_URI, true, volumeWatcher,
+        )
+        refreshVolumes()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        runCatching { contentResolver.unregisterContentObserver(volumeWatcher) }
     }
 
 
@@ -124,49 +166,59 @@ class MainActivity : AppCompatActivity() {
         }, Feedback.HOLD_MS)
     }
 
-    private fun drawVolumes() {
+    /** Build the rows once. Their values are filled in by refreshVolumes(). */
+    private fun buildVolumeRows() {
         volumeRows.removeAllViews()
+        rows.clear()
         Volume.STREAMS.forEach { stream ->
             val view = layoutInflater.inflate(R.layout.volume_row, volumeRows, false)
             val label = view.findViewById<TextView>(R.id.volume_label)
             val bar = view.findViewById<SeekBar>(R.id.volume_bar)
 
-            val max = router.volumeMax(stream.id)
-            val index = router.volumeIndex(stream.id)
-            label.text = Volume.label(stream.label, index, max)
-            label.setTextColor(color(if (Volume.isLow(index, max)) R.color.fault else R.color.sand))
-            bar.progress = Volume.percentFor(index, max)
-            bar.isEnabled = max > 0
-
             bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(b: SeekBar, p: Int, fromUser: Boolean) {
-                    if (fromUser) label.text = Volume.label(stream.label, Volume.indexFor(p, max), max)
+                    // Guarded: refreshVolumes() sets progress itself, and without this every
+                    // observer callback would redraw the label from a half-applied value.
+                    if (!fromUser) return
+                    val max = router.volumeMax(stream.id)
+                    label.text = Volume.label(stream.label, Volume.indexFor(p, max), max)
                 }
 
                 override fun onStartTrackingTouch(b: SeekBar) = Unit
 
-                /** Applied on release, not on every pixel: each apply is a real system call. */
+                /** Applied on release: each apply is a real system call. */
                 override fun onStopTrackingTouch(b: SeekBar) {
                     b.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                    val max = router.volumeMax(stream.id)
                     val outcome = router.setVolume(stream.id, Volume.indexFor(b.progress, max))
-                    val now = router.volumeIndex(stream.id)
-                    label.text = when (outcome) {
-                        is Router.Outcome.Moved -> Volume.label(stream.label, now, max)
-                        is Router.Outcome.Refused -> outcome.why
+                    if (outcome is Router.Outcome.Refused) {
+                        label.text = outcome.why
+                        label.setTextColor(color(R.color.fault))
                     }
-                    label.setTextColor(
-                        color(
-                            when {
-                                outcome is Router.Outcome.Refused -> R.color.fault
-                                Volume.isLow(now, max) -> R.color.fault
-                                else -> R.color.amber
-                            }
-                        )
+                    refreshVolumes()
+                    val now = router.volumeIndex(stream.id)
+                    StatusBanner.show(
+                        this@MainActivity,
+                        TileText.banner(stream.label, Volume.percentFor(now, max), max),
                     )
-                    b.progress = Volume.percentFor(now, max)
+                    // The tiles cannot see this happen. Tell them.
+                    TileNudge.all(this@MainActivity)
                 }
             })
             volumeRows.addView(view)
+            rows.add(Triple(stream, label, bar))
+        }
+    }
+
+    /** Re-read every stream from the platform and put the numbers on screen. */
+    private fun refreshVolumes() {
+        rows.forEach { (stream, label, bar) ->
+            val max = router.volumeMax(stream.id)
+            val index = router.volumeIndex(stream.id)
+            label.text = Volume.label(stream.label, index, max)
+            label.setTextColor(color(if (Volume.isLow(index, max)) R.color.fault else R.color.sand))
+            bar.isEnabled = max > 0
+            bar.progress = Volume.percentFor(index, max)
         }
     }
 

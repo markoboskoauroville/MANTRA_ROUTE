@@ -1,7 +1,11 @@
 package com.mantra.route
 
 import android.content.Context
+import android.database.ContentObserver
 import android.graphics.drawable.Icon
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import android.widget.Toast
@@ -41,9 +45,31 @@ abstract class VolumeTileService : TileService() {
 
     private fun key() = "up_" + stream.id
 
+    /**
+     * While the panel is open, follow the volume wherever it is changed from.
+     *
+     * onStartListening fires when the panel opens and at no other time, so a change made with
+     * the hardware keys, or on the app's sliders, or by another tile, left this face showing a
+     * level that was no longer true — for as long as the panel stayed open.
+     *
+     * The settings table is the one place all of those routes write to.
+     */
+    private val watcher = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) = paint()
+    }
+
     override fun onStartListening() {
         super.onStartListening()
+        runCatching {
+            contentResolver.registerContentObserver(Settings.System.CONTENT_URI, true, watcher)
+        }
         paint()
+    }
+
+    /** Unregistered as soon as the panel closes: an observer on a tile nobody is looking at. */
+    override fun onStopListening() {
+        runCatching { contentResolver.unregisterContentObserver(watcher) }
+        super.onStopListening()
     }
 
     override fun onClick() {
@@ -68,7 +94,13 @@ abstract class VolumeTileService : TileService() {
                 // cannot land exactly on a preset the two differ, and the bubble must report
                 // the level that is actually in force.
                 val landed = Presets.snap(Volume.percentFor(router.volumeIndex(stream.id), max), max)
-                say(TileText.spoken(stream.label, landed, max))
+                // The banner if it is allowed, the toast if it is not. Never neither: a press
+                // with no acknowledgement is the complaint this whole feature answers.
+                if (StatusBanner.canShow(this)) {
+                    StatusBanner.show(this, TileText.banner(stream.label, landed, max))
+                } else {
+                    say(TileText.spoken(stream.label, landed, max))
+                }
             }
             is Router.Outcome.Refused -> {
                 say(outcome.why)
@@ -91,6 +123,16 @@ abstract class VolumeTileService : TileService() {
         runCatching { Toast.makeText(applicationContext, sentence, Toast.LENGTH_SHORT).show() }
     }
 
+    /**
+     * Draw the level that is ACTUALLY set, not the nearest preset.
+     *
+     * The face follows the app's sliders wherever they are put: 63% shows a 6. `snap` only
+     * rounds when the measured level is within half a step of a preset, which is the case where
+     * the hardware could not land on it exactly — 26.7% on the fifteen-step Call stream is
+     * shown as 25 because 25 is what it was asked for and the closest it can get.
+     *
+     * Pressing is what snaps to a preset. Displaying does not.
+     */
     private fun paint() {
         val tile = qsTile ?: return
         val router = Router(this)

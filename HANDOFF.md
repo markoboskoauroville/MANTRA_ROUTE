@@ -1075,3 +1075,61 @@ rather than written from memory.
 
 **G4c** added: the build fails if no QS_TILE_PREFERENCES activity is declared. Proven to fail by
 renaming the action and watching it go red.
+
+---
+
+## v26/v27 — two-way sync, real percentages, one letter, and a banner
+
+### The sync was not slow, it was absent
+
+The app read the volumes **only in onResume**, and pulling the shade down does not pause the
+activity underneath — so a change made in Quick Settings never reached an open app at all until
+it was left and returned to. A tile repainted only when the panel opened and after its own
+press, so a change made on the sliders left it stale for as long as the panel stayed shut.
+
+Both sides now watch `Settings.System.CONTENT_URI`, which is the one place every route writes
+to: the tiles, the hardware keys, the system panel, this app. The app also calls
+`TileService.requestListeningState` after a change, which is the platform's way of saying
+"repaint now" to a tile whose panel is closed.
+
+The sliders are built once and refreshed in place. Rebuilding them on every observer callback
+would have thrown away the listeners mid-drag.
+
+### The face shows the level, not the nearest preset
+
+`snap` only rounds when the measured level is within half a step of a preset — the case where
+the hardware could not land on it exactly. 26.7% on the fifteen-step Call stream reads as 25
+because 25 is what it was asked for; 63% reads as 63. Seventeen distinct faces across a
+sixteen-step slider, checked.
+
+**Pressing snaps. Displaying does not.**
+
+### Elevator: the next stop IN THE DIRECTION OF TRAVEL
+
+The first rule snapped to the nearest stop and then stepped from there, which mishandled every
+level not already on a stop — and the slider can put it anywhere. From silence it went to 50,
+skipping 25 entirely; from 94% it went DOWN to 75 rather than up to 100. Both spent the press on
+a correction nobody asked for.
+
+### One letter
+
+C, M, R, N, A — the five channels start with five different letters, so the second was carrying
+no information. The widest face went from `ME100` to `M100`, and since every face is sized to
+the widest, **the text went from 53px to 65px**. A test asserts the five letters are distinct so
+a sixth channel colliding would fail loudly rather than drawing two identical tiles.
+
+### The banner, and why it is an overlay
+
+**A toast cannot be put at the top of the screen.** Since Android 11 a text toast ignores
+`setGravity`, and a custom-view toast is blocked from the background — which is exactly where a
+Quick Settings tile runs. An overlay window is the only route, and it costs the "Display over
+other apps" permission, granted on the phone with no computer involved.
+
+If it is not granted the tile falls back to the toast. Smaller and in the wrong place still
+beats silence.
+
+The window is `FLAG_NOT_TOUCHABLE`; without it the line would swallow taps meant for whatever is
+underneath, including the tile that put it there. The view is reused rather than re-added, or
+every press would leak a window and stack stale lines down the screen.
+
+TEST 1: 46 green.

@@ -44,31 +44,6 @@ class PresetsTest {
     }
 
     @Test
-    fun `the digit is the leading one, and 100 is a bare 1`() {
-        assertEquals("2", Presets.digit(25))
-        assertEquals("5", Presets.digit(50))
-        assertEquals("7", Presets.digit(75))
-        assertEquals("1", Presets.digit(100))
-    }
-
-    @Test
-    fun `the 1 collision is real and is resolved by the white state, not by the digit`() {
-        // A tenth also leads with 1. Nothing in the text can separate them, so the test pins
-        // that the STATE does: only 100 is full.
-        assertEquals("1", Presets.digit(10))
-        assertEquals("1", Presets.digit(100))
-        assertTrue(Presets.isFull(100))
-        assertEquals(false, Presets.isFull(10))
-    }
-
-    @Test
-    fun `below ten there is no leading digit to show`() {
-        assertEquals("0", Presets.digit(5))
-        assertEquals("0", Presets.digit(0))
-        assertEquals(false, Presets.isFull(0))
-    }
-
-    @Test
     fun `full is exact at the boundary`() {
         assertEquals(false, Presets.isFull(99))
         assertTrue(Presets.isFull(100))
@@ -78,26 +53,32 @@ class PresetsTest {
 class FaceTest {
 
     @Test
-    fun `two letters per channel, and all five differ`() {
-        val two = Volume.STREAMS.map { TileText.two(it.label) }
-        assertEquals(listOf("CA", "ME", "RI", "NO", "AL"), two)
-        assertEquals(5, two.toSet().size)
-        two.forEach { assertEquals(2, it.length) }
+    fun `one letter per channel, and all five differ`() {
+        // The whole basis of the single letter: C M R N A collide with nothing. If a sixth
+        // channel ever starts with one of these, this fails loudly instead of quietly drawing
+        // two identical tiles.
+        val one = Volume.STREAMS.map { TileText.one(it.label) }
+        assertEquals(listOf("C", "M", "R", "N", "A"), one)
+        assertEquals(5, one.toSet().size)
+        one.forEach { assertEquals(1, it.length) }
     }
 
     @Test
-    fun `the face is three characters, always`() {
-        assertEquals("CA1", TileText.face("Call", 100, 15))
-        assertEquals("ME5", TileText.face("Media", 50, 16))
-        assertEquals("CA2", TileText.face("Call", 27, 15))
-        listOf(25, 50, 75, 100).forEach {
+    fun `the face is two letters and the level, so it grows with the number`() {
+        // v26: the level is a real percentage now, so a face is 4 or 5 characters. The uniform
+        // text size is computed against the widest, which is why this length matters.
+        assertEquals("C100", TileText.face("Call", 100, 15))
+        assertEquals("M50", TileText.face("Media", 50, 16))
+        assertEquals("C25", TileText.face("Call", 27, 15))
+        listOf(25, 50, 75).forEach {
             assertEquals(3, TileText.face("Media", it, 16).length)
         }
+        assertEquals(4, TileText.face("Media", 100, 16).length)
     }
 
     @Test
     fun `a stream with no range says so rather than showing a level`() {
-        assertEquals("CA-", TileText.face("Call", 0, 0))
+        assertEquals("C--", TileText.face("Call", 0, 0))
         assertEquals("Call unavailable", TileText.label("Call", 0, 0))
         assertEquals("Call has no volume range on this phone", TileText.spoken("Call", 0, 0))
     }
@@ -111,9 +92,9 @@ class FaceTest {
     }
 
     @Test
-    fun `an unknown channel still yields two characters rather than crashing`() {
-        assertEquals("BL", TileText.two("Bluetooth"))
-        assertEquals("--", TileText.two("123"))
+    fun `an unknown channel still yields a letter rather than crashing`() {
+        assertEquals("B", TileText.one("Bluetooth"))
+        assertEquals("-", TileText.one("123"))
     }
 }
 
@@ -333,5 +314,109 @@ class ElevatorTest {
     @Test
     fun `every stop is visited over a long walk`() {
         assertEquals(setOf(25, 50, 75, 100), walk(16, 20).toSet())
+    }
+}
+
+/**
+ * The face carries the real percentage, and a press still lands on a preset.
+ * Two requirements that pull in opposite directions.
+ */
+class PercentFaceTest {
+
+    @Test
+    fun `the face shows the level that is actually set, not the nearest preset`() {
+        assertEquals("M63", TileText.face("Media", 63, 16))
+        assertEquals("M31", TileText.face("Media", 31, 16))
+        assertEquals("C100", TileText.face("Call", 100, 15))
+    }
+
+    @Test
+    fun `a level the hardware cannot land on exactly still reads as what it was asked for`() {
+        // 25% of the fifteen-step Call stream is 26.7%. It was asked for 25 and 25 is the
+        // closest it can get, so 25 is what it says.
+        assertEquals("C25", TileText.face("Call", 27, 15))
+    }
+
+    @Test
+    fun `the whole slider produces many different faces, not four`() {
+        // The point of following the fine setting: if this collapsed to four the app's sliders
+        // and the tiles would disagree everywhere in between.
+        val faces = (0..16).map { TileText.face("Media", Volume.percentFor(it, 16), 16) }.toSet()
+        assertTrue("only ${faces.size} distinct faces", faces.size > 8)
+    }
+
+    @Test
+    fun `ten and one hundred are no longer the same face`() {
+        // The single digit could not tell them apart and leaned on colour to do it.
+        assertTrue(TileText.face("Media", 10, 16) != TileText.face("Media", 100, 16))
+    }
+
+    @Test
+    fun `a stream with no range shows dashes, not a zero`() {
+        assertEquals("C--", TileText.face("Call", 0, 0))
+    }
+}
+
+class ElevatorDirectionTest {
+
+    @Test
+    fun `from silence the first press goes to the lowest preset, not past it`() {
+        // "Nearest stop then step" sent 0% to 50, skipping 25 entirely.
+        val step = Elevator.step(0, 16, goingUp = true)
+        assertEquals(Volume.indexFor(25, 16), step.index)
+        assertTrue(step.goingUp)
+    }
+
+    @Test
+    fun `just below the top, pressing up reaches the top rather than turning round`() {
+        // 94% used to go DOWN to 75, because it snapped to 100 first and then stepped back.
+        val step = Elevator.step(15, 16, goingUp = true)
+        assertEquals(Volume.indexFor(100, 16), step.index)
+        assertTrue(step.goingUp)
+    }
+
+    @Test
+    fun `at the very top it turns round and moves`() {
+        val step = Elevator.step(Volume.indexFor(100, 16), 16, goingUp = true)
+        assertEquals(Volume.indexFor(75, 16), step.index)
+        assertEquals(false, step.goingUp)
+    }
+
+    @Test
+    fun `at the very bottom it turns round and moves`() {
+        val step = Elevator.step(Volume.indexFor(25, 16), 16, goingUp = false)
+        assertEquals(Volume.indexFor(50, 16), step.index)
+        assertTrue(step.goingUp)
+    }
+
+    @Test
+    fun `every press lands exactly on a preset, from any starting level`() {
+        val stops = Presets.stops(16)
+        for (index in 0..16) {
+            for (up in listOf(true, false)) {
+                assertTrue("from $index up=$up", Elevator.step(index, 16, up).index in stops)
+            }
+        }
+    }
+}
+
+/** The line across the top of the screen. */
+class BannerTest {
+
+    @Test
+    fun `it names the channel and the level, in capitals`() {
+        assertEquals("MEDIA  25%", TileText.banner("Media", 25, 16))
+        assertEquals("CALL  100%", TileText.banner("Call", 100, 15))
+    }
+
+    @Test
+    fun `it reports the level that was reached, snapping only where the hardware cannot land`() {
+        assertEquals("CALL  25%", TileText.banner("Call", 27, 15))
+        assertEquals("MEDIA  63%", TileText.banner("Media", 63, 16))
+    }
+
+    @Test
+    fun `a stream with no range says so rather than claiming zero percent`() {
+        assertEquals("CALL  NO RANGE", TileText.banner("Call", 0, 0))
     }
 }
