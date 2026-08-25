@@ -33,8 +33,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var probeRows: LinearLayout
     private lateinit var balanceBar: SeekBar
     private lateinit var balanceLine: TextView
-    private lateinit var notifButton: TextView
     private lateinit var copyButton: TextView
+    private lateinit var dndButton: TextView
     private lateinit var releaseButton: TextView
     private lateinit var callAudioLine: TextView
     private lateinit var patchHeaders: LinearLayout
@@ -45,8 +45,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var arrangeRows: LinearLayout
     private lateinit var arrangeReset: TextView
 
-    private val askNotifications =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { redraw() }
 
     /**
      * Without BLUETOOTH_CONNECT the platform still lists Bluetooth outputs, but hands back an
@@ -90,8 +88,8 @@ class MainActivity : AppCompatActivity() {
         probeRows = findViewById(R.id.probe_rows)
         balanceBar = findViewById(R.id.balance_bar)
         balanceLine = findViewById(R.id.balance_line)
-        notifButton = findViewById(R.id.notif_button)
         copyButton = findViewById(R.id.copy_button)
+        dndButton = findViewById(R.id.dnd_button)
         releaseButton = findViewById(R.id.release_button)
         callAudioLine = findViewById(R.id.call_audio_line)
         patchHeaders = findViewById(R.id.patch_headers)
@@ -105,7 +103,6 @@ class MainActivity : AppCompatActivity() {
         arrangeReset.setOnClickListener {
             state.resetArrangement()
             redraw()
-            Notifier.post(this)
         }
 
         findViewById<TextView>(R.id.version).text = "v" + BuildConfig.VERSION_NAME
@@ -116,13 +113,34 @@ class MainActivity : AppCompatActivity() {
 
         probeButton.setOnClickListener { probe() }
 
+        // The one permission the tiles need, and it is granted on the phone in Settings —
+        // no Shizuku, no computer, no Wi-Fi. Only Ring and Notification are affected, and
+        // only while Do Not Disturb is on.
+        dndButton.setOnClickListener {
+            press(dndButton, "Do Not Disturb access") {
+                val manager = getSystemService(android.app.NotificationManager::class.java)
+                if (manager.isNotificationPolicyAccessGranted) {
+                    "Already granted — Ring and Notification tiles work"
+                } else {
+                    runCatching {
+                        startActivity(
+                            android.content.Intent(
+                                android.provider.Settings
+                                    .ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS
+                            ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                        "Find Mantra Route in the list and switch it on"
+                    }.getOrElse { "this build has no Do Not Disturb access screen" }
+                }
+            }
+        }
+
         // The thing a person reaches for when the speakerphone has stopped working. It does not
         // depend on Shizuku, on a probe having been run, or on anything else being right.
         releaseButton.setOnClickListener {
             press(releaseButton, RELEASE_LABEL) {
                 val outcome = router.releaseCallAudio()
                 state.lastSelectedKey = ""
-                Notifier.post(this)
                 callAudioLine.text = router.callAudioReport()
                 drawPatchBay()
                 when (outcome) {
@@ -163,16 +181,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        notifButton.setOnClickListener {
-            if (needsNotificationPermission()) {
-                askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
-            } else {
-                press(notifButton, "Show the switcher") {
-                    Notifier.post(this)
-                    "Panel posted — pull down the shade"
-                }
-            }
-        }
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) !=
             PackageManager.PERMISSION_GRANTED
@@ -241,7 +249,6 @@ class MainActivity : AppCompatActivity() {
                 probeButton.text = "Probe again"
                 probeButton.isEnabled = true
                 redraw()
-                Notifier.post(this)
             }
         }.start()
     }
@@ -290,7 +297,6 @@ class MainActivity : AppCompatActivity() {
                 setOnCheckedChangeListener { _, _ ->
                     state.toggleOff(row.key)
                     drawArrangeRows()
-                    Notifier.post(this@MainActivity)
                 }
             }
             arrangeRows.addView(view)
@@ -365,15 +371,8 @@ class MainActivity : AppCompatActivity() {
         callAudioLine.text = router.callAudioReport()
         drawPatchBay()
         drawVolumes()
-
-        notifButton.text =
-            if (needsNotificationPermission()) "Allow notifications" else "Show the switcher"
     }
 
-    private fun needsNotificationPermission(): Boolean =
-        Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
-            PackageManager.PERMISSION_GRANTED
 
     private fun color(id: Int) = ContextCompat.getColor(this, id)
 
@@ -517,7 +516,6 @@ class MainActivity : AppCompatActivity() {
             is Router.Outcome.Refused -> "${row.label}: ${outcome.why}"
         }
         if (outcome !is Router.Outcome.Refused) state.lastSelectedKey = row.key
-        Notifier.post(this)
         drawPatchBay()
     }
 

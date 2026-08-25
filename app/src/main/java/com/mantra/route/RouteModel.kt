@@ -621,3 +621,52 @@ object TileText {
         else -> "tap for 100%"
     }
 }
+
+/**
+ * What needs Shizuku and what does not.
+ *
+ * Asked on 24.8.2026: why does this app need Shizuku when other volume apps do not? Because the
+ * app conflated three different things under one banner. Separated here so the screen can stop
+ * implying that nothing works without a shell.
+ *
+ * Shizuku is started over adb, which on a phone means Wireless debugging, which means Wi-Fi and
+ * a fresh pairing after every reboot. For someone who is often without Wi-Fi that is not an
+ * inconvenience, it is a hard stop — so anything that can avoid it must.
+ */
+enum class Need {
+    /** Works out of the box. No permission, no shell, nothing to start. */
+    NOTHING,
+
+    /** Needs a switch the person can flip in Settings on the phone itself. */
+    SETTINGS_TOGGLE,
+
+    /** Genuinely needs a privileged shell. Nothing on the phone alone will do it. */
+    SHIZUKU,
+}
+
+object Needs {
+
+    /**
+     * Volume is the whole point of the tiles, and it needs nothing.
+     *
+     * `setStreamVolume` is guarded by no permission. That is the answer to "why can other apps
+     * do this" — they are not doing anything privileged, and neither are these tiles. The
+     * single exception is Do Not Disturb, which blocks Ring and Notification until the app is
+     * given notification-policy access, and that is a toggle in Settings.
+     */
+    fun forVolume(streamId: Int, dndActive: Boolean, policyGranted: Boolean): Need = when {
+        streamId != 2 && streamId != 5 -> Need.NOTHING
+        !dndActive -> Need.NOTHING
+        policyGranted -> Need.NOTHING
+        else -> Need.SETTINGS_TOGGLE
+    }
+
+    /** master_mono and master_balance are Settings.Secure. Only a shell may write those. */
+    fun forMonoAndBalance(): Need = Need.SHIZUKU
+
+    fun describe(need: Need): String = when (need) {
+        Need.NOTHING -> "works out of the box"
+        Need.SETTINGS_TOGGLE -> "needs Do Not Disturb access, granted in Settings"
+        Need.SHIZUKU -> "needs Shizuku"
+    }
+}

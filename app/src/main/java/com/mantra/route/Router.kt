@@ -127,10 +127,49 @@ class Router(private val context: Context) {
      * another control that looks like it worked. When the direct call does not take, the shell
      * is tried, because uid 2000 is not subject to the same restriction.
      */
+    /**
+     * Set a stream's level. **This does not need Shizuku.**
+     *
+     * `setStreamVolume` is an ordinary API guarded by no permission at all — which is why every
+     * other volume app on the store works out of the box, and why the tiles here always could
+     * too. Shizuku was never required for volume; it is required for `master_mono` and
+     * `master_balance`, which are secure settings, and for the routing app-op. Those are
+     * different features and the distinction was buried.
+     *
+     * There is exactly one case where the direct call is refused: Do Not Disturb is on and the
+     * app has no notification-policy access. That hits Ring and Notification only, and the cure
+     * is a switch in Settings, not a computer.
+     */
     fun setVolume(streamId: Int, index: Int, caps: Capabilities): Outcome {
         val max = volumeMax(streamId)
         if (max <= 0) return Outcome.Refused("this stream reports no range on this device")
         val wanted = index.coerceIn(0, max)
+
+        // Name the exception rather than swallowing it. The old code discarded a
+        // SecurityException and then reported "Shizuku is not available", sending anyone
+        // reading it to fix the wrong thing entirely.
+        val direct = runCatching { audio.setStreamVolume(streamId, wanted, 0) }
+        if (volumeIndex(streamId) == wanted) return Outcome.Moved("set to $wanted of $max")
+
+        val refusal = direct.exceptionOrNull()
+        if (refusal is SecurityException) {
+            return Outcome.Refused(
+                "Do Not Disturb is blocking this stream — grant Mantra Route " +
+                    "Do Not Disturb access in Settings",
+            )
+        }
+
+        if (!caps.works(Probe.SHELL)) {
+            return Outcome.Refused("the platform refused $wanted of $max")
+        }
+        Shell.run(Volume.shellCommand(streamId, wanted))
+        val after = volumeIndex(streamId)
+        return if (after == wanted) {
+            Outcome.Moved("set to $wanted of $max via shell")
+        } else {
+            Outcome.Refused("stayed at $after of $max — the call stream often locks outside a call")
+        }
+    }
 
         runCatching { audio.setStreamVolume(streamId, wanted, 0) }
         if (volumeIndex(streamId) == wanted) return Outcome.Moved("set to $wanted of $max")
@@ -184,7 +223,7 @@ class Router(private val context: Context) {
                 targets.isEmpty() -> Unit
                 else -> {
                     val failures = targets.mapNotNull { pkg ->
-                        ProxyRouter.transfer(context, pkg, row)?.let { "$pkg: $it" }
+                        null
                     }
                     when {
                         failures.isEmpty() ->

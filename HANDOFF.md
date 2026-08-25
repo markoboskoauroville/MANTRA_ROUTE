@@ -658,3 +658,52 @@ the icons it depended on were repaired.
 
 TEST 1: 71 green. The Media rename correctly broke a v14 test that asserted "Music" — the test
 doing its job, and fixed rather than deleted.
+
+---
+
+## v16 — notifications removed, and Shizuku is no longer needed for the tiles
+
+### The tiles never needed Shizuku, and the app was implying otherwise
+
+Asked on 24.8.2026: why does this app need Shizuku when other volume apps do not?
+
+**It does not, and it never did.** `AudioManager.setStreamVolume` is guarded by **no permission
+at all**. That is the whole answer to "why can other apps do it": they are not doing anything
+privileged, and neither are these tiles. `Router.setVolume` has always tried the direct call
+first and only fallen through to the shell if it was refused.
+
+What actually needed Shizuku was three different things wearing one banner:
+
+| | needs |
+|---|---|
+| Volume tiles — Call, Media, Alarm | **nothing** |
+| Volume tiles — Ring, Notification | nothing, unless Do Not Disturb is on |
+| `master_mono`, `master_balance` | Shizuku — they are `Settings.Secure` |
+| routing app-op | Shizuku — and it never produced a working route anyway |
+
+The app conflated them by leading with "Shizuku connected" and gating a probe-driven UI behind
+it. `Needs` names the distinction and a test asserts the property that matters: **no combination
+of stream, DND state and permission ever returns SHIZUKU for volume.**
+
+### One real gap, and it was hidden by a swallowed exception
+
+`setStreamVolume` throws `SecurityException` in exactly one case — Do Not Disturb is on and the
+app has no notification-policy access, which affects Ring and Notification only. The old code
+did `runCatching { … }` and discarded it, then reported *"Shizuku is not available to force it"*,
+sending anyone reading it to fix entirely the wrong thing.
+
+Now the exception is named, `ACCESS_NOTIFICATION_POLICY` is declared, and a **Do Not Disturb
+access** button opens the right Settings screen. Granted on the phone. No computer, no Wi-Fi.
+
+### Removed
+
+`Notifier.kt`, `RouteReceiver.kt`, `ProxyRouter.kt`, four `notif_*` layouts, the
+`RouteListener` notification-listener service, and the `POST_NOTIFICATIONS` and
+`RECEIVE_BOOT_COMPLETED` permissions.
+
+The listener is worth calling out: it read **every notification on the phone**, and it existed
+only to name which app was playing so the proxy router could move it. The proxy router never
+once moved anything. That is a large permission held for a feature that never worked, and it is
+gone.
+
+TEST 1: 75 green.

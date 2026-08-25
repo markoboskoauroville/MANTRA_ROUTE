@@ -712,3 +712,44 @@ class TileTextTest {
         listOf(0, 3, 2, 5, 4).forEach { Volume.byId(it) }
     }
 }
+
+/**
+ * What needs Shizuku and what does not. The distinction the app had buried.
+ */
+class NeedsTest {
+
+    @Test
+    fun `call media and alarm volume need nothing at all, ever`() {
+        // Not even with Do Not Disturb on. These are the tiles that must work on a phone that
+        // has never seen Wi-Fi.
+        listOf(0, 3, 4).forEach { stream ->
+            assertEquals(Need.NOTHING, Needs.forVolume(stream, dndActive = false, policyGranted = false))
+            assertEquals(Need.NOTHING, Needs.forVolume(stream, dndActive = true, policyGranted = false))
+        }
+    }
+
+    @Test
+    fun `ring and notification need nothing until Do Not Disturb is on`() {
+        listOf(2, 5).forEach { stream ->
+            assertEquals(Need.NOTHING, Needs.forVolume(stream, dndActive = false, policyGranted = false))
+            assertEquals(Need.SETTINGS_TOGGLE, Needs.forVolume(stream, dndActive = true, policyGranted = false))
+            assertEquals(Need.NOTHING, Needs.forVolume(stream, dndActive = true, policyGranted = true))
+        }
+    }
+
+    @Test
+    fun `nothing about volume ever requires Shizuku`() {
+        // The property that matters: no combination of inputs returns SHIZUKU.
+        for (stream in listOf(0, 2, 3, 4, 5))
+            for (dnd in listOf(true, false))
+                for (granted in listOf(true, false))
+                    assertTrue(Needs.forVolume(stream, dnd, granted) != Need.SHIZUKU)
+    }
+
+    @Test
+    fun `mono and balance are honest about needing a shell`() {
+        assertEquals(Need.SHIZUKU, Needs.forMonoAndBalance())
+        assertEquals("needs Shizuku", Needs.describe(Need.SHIZUKU))
+        assertEquals("works out of the box", Needs.describe(Need.NOTHING))
+    }
+}

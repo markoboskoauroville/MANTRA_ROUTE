@@ -4,11 +4,19 @@
 
     <!-- setCommunicationDevice and reading the audio device list. Normal permission. -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!--
+      The ONLY permission the Quick Settings tiles need, and it is a normal user-grantable
+      special access - no Shizuku, no adb, no computer.
+
+      setStreamVolume() itself needs nothing. It throws SecurityException in exactly one case:
+      Do Not Disturb is on and the app cannot touch notification policy. That affects the Ring
+      and Notification tiles. This makes those work too, granted from Settings on the phone.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <!-- Without this the platform reports Bluetooth outputs with an empty name and address,
          which is what turns two pairs of earbuds into one unnameable row. -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Declared so `pm grant` has something to move. It is signature|privileged and is
          expected to stay ungranted; the probe records the refusal rather than assuming it. -->
@@ -44,25 +52,10 @@
         <!-- The Quick Settings tile. TILE=false so it is not force-added; it is placed by
              hand from the pencil / edit button in the Quick Settings panel. -->
 
-        <receiver
-            android:name=".RouteReceiver"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
 
         <!-- Not a listener in any real sense: it reads nothing and overrides nothing. It
              exists so `cmd notification allow_listener` has a component to allow, which is
              the only way to learn which app is playing without a privileged permission. -->
-        <service
-            android:name=".RouteListener"
-            android:exported="false"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
-            <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService" />
-            </intent-filter>
-        </service>
 
         <provider
             android:name="rikka.shizuku.ShizukuProvider"
