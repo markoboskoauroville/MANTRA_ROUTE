@@ -70,101 +70,7 @@ class VolumeMathTest {
     }
 }
 
-class ToggleTest {
 
-    @Test
-    fun `a stream that is loud but not maximum still quietens`() {
-        // The case the midpoint rule exists for. The naive `if (index == high)` rule raises
-        // 13/15 to 100% instead of halving it, and every other case agrees with it.
-        assertTrue(VolumeToggle.atHigh(13, 15, VolumeToggle.LOUD))
-        assertEquals(8, VolumeToggle.target(13, 15, VolumeToggle.LOUD))
-        assertEquals(false, VolumeToggle.atHigh(11, 15, VolumeToggle.LOUD))
-        assertEquals(15, VolumeToggle.target(11, 15, VolumeToggle.LOUD))
-    }
-
-    @Test
-    fun `two presses return you to where you started, for either pair`() {
-        for (pair in listOf(VolumeToggle.LOUD, VolumeToggle.QUIET))
-            for (max in listOf(5, 7, 15, 16, 30)) {
-                val start = Volume.indexFor(pair.low, max)
-                val once = VolumeToggle.target(start, max, pair)
-                assertEquals("pair=$pair max=$max", start, VolumeToggle.target(once, max, pair))
-            }
-    }
-
-    @Test
-    fun `the quiet tile moves between 50 and 25`() {
-        val q = VolumeToggle.QUIET
-        assertEquals(8, VolumeToggle.target(4, 16, q))
-        assertEquals(4, VolumeToggle.target(8, 16, q))
-    }
-
-    @Test
-    fun `a loud stream pressed on the quiet tile goes quiet, not louder`() {
-        // Stopping at 50 would take two presses to reach the level the tile exists for.
-        assertEquals(4, VolumeToggle.target(16, 16, VolumeToggle.QUIET))
-    }
-
-    @Test
-    fun `the midpoint is the switching point and differs per pair`() {
-        assertEquals(75, VolumeToggle.LOUD.midpoint)
-        assertEquals(37, VolumeToggle.QUIET.midpoint)
-    }
-
-    @Test
-    fun `an inverted pair is rejected at construction`() {
-        try {
-            TogglePair(high = 25, low = 50)
-            throw AssertionError("expected a failure for an inverted pair")
-        } catch (e: IllegalArgumentException) {
-            assertTrue(e.message!!.contains("25"))
-        }
-    }
-
-    @Test
-    fun `the face is a bare number so the digits can be drawn larger`() {
-        assertEquals("100", VolumeToggle.face(16, 16, VolumeToggle.LOUD))
-        assertEquals("25", VolumeToggle.face(4, 16, VolumeToggle.QUIET))
-        assertEquals("--", VolumeToggle.face(0, 0, VolumeToggle.LOUD))
-    }
-}
-
-class TileTextTest {
-
-    @Test
-    fun `every channel has a readable four-letter name`() {
-        val names = Volume.STREAMS.map { TileText.four(it.label) }
-        assertEquals(listOf("CALL", "MEDI", "RING", "NOTF", "ALRM"), names)
-        names.forEach { assertEquals(4, it.length) }
-    }
-
-    @Test
-    fun `the names are chosen, not truncated`() {
-        // "ALARM".take(4) is "ALAR", which reads as nothing.
-        assertEquals("ALRM", TileText.four("Alarm"))
-        assertEquals("NOTF", TileText.four("Notification"))
-    }
-
-    @Test
-    fun `an unknown channel still yields four characters rather than crashing`() {
-        assertEquals("BLUE", TileText.four("Bluetooth"))
-        assertEquals("----", TileText.four("123"))
-    }
-
-    @Test
-    fun `the label names the level and which pair it toggles`() {
-        assertEquals("Media 100%  (50/100)", TileText.label("Media", 16, 16, VolumeToggle.LOUD))
-        assertEquals("Alarm 50%  (25/50)", TileText.label("Alarm", 8, 16, VolumeToggle.QUIET))
-        assertEquals("Call unavailable", TileText.label("Call", 3, 0, VolumeToggle.LOUD))
-    }
-
-    @Test
-    fun `the subtitle says what the next press does, not what the state is`() {
-        assertEquals("tap for 50%", TileText.nextAction(15, 15, VolumeToggle.LOUD))
-        assertEquals("tap for 100%", TileText.nextAction(4, 15, VolumeToggle.LOUD))
-        assertEquals("no range on this device", TileText.nextAction(0, 0, VolumeToggle.LOUD))
-    }
-}
 
 class NeedsTest {
 
@@ -216,68 +122,6 @@ class FeedbackTest {
 /**
  * The 27 bug, and the range.
  */
-class DisplayTest {
-
-    @Test
-    fun `the call stream has fifteen steps and cannot land on 25 exactly`() {
-        // The arithmetic behind the report: 25% of 15 is 3.75, step 4 of 15 is 26.7%, shown 27.
-        assertEquals(4, Volume.indexFor(25, 15))
-        assertEquals(27, Volume.percentFor(4, 15))
-    }
-
-    @Test
-    fun `a tile asked for 25 shows 25, on a fifteen step stream`() {
-        assertEquals(25, Volume.displayPercent(4, 15, VolumeToggle.QUIET))
-        assertEquals(50, Volume.displayPercent(8, 15, VolumeToggle.QUIET))
-        assertEquals(50, Volume.displayPercent(8, 15, VolumeToggle.LOUD))
-        assertEquals(100, Volume.displayPercent(15, 15, VolumeToggle.LOUD))
-    }
-
-    @Test
-    fun `a sixteen step stream was never wrong and is not changed`() {
-        assertEquals(25, Volume.displayPercent(4, 16, VolumeToggle.QUIET))
-        assertEquals(50, Volume.displayPercent(8, 16, VolumeToggle.LOUD))
-        assertEquals(100, Volume.displayPercent(16, 16, VolumeToggle.LOUD))
-    }
-
-    @Test
-    fun `a level set from somewhere else is reported honestly, not snapped`() {
-        // The line between rounding and lying. 60% is not the tile's doing and must not be
-        // dressed up as 50, or the face would claim a state the tile did not put there.
-        assertEquals(63, Volume.displayPercent(10, 16, VolumeToggle.LOUD))
-        assertEquals(75, Volume.displayPercent(12, 16, VolumeToggle.LOUD))
-        assertEquals(0, Volume.displayPercent(0, 16, VolumeToggle.QUIET))
-    }
-
-    @Test
-    fun `snapping never reaches further than half a step`() {
-        // On a 16 step stream half a step is about 3 points, so 31% must stay 31 and not
-        // become 25 or 50.
-        assertEquals(31, Volume.displayPercent(5, 16, VolumeToggle.QUIET))
-    }
-
-    @Test
-    fun `a stream with no range shows nothing rather than zero percent`() {
-        assertEquals(0, Volume.displayPercent(0, 0, VolumeToggle.LOUD))
-        assertEquals("--", VolumeToggle.face(0, 0, VolumeToggle.LOUD))
-    }
-
-    @Test
-    fun `the range names both ends, low first, so the two tiles differ on sight`() {
-        assertEquals("50/100", TileText.range(VolumeToggle.LOUD))
-        assertEquals("25/50", TileText.range(VolumeToggle.QUIET))
-    }
-
-    @Test
-    fun `the two tiles for one channel can be told apart when both read 50`() {
-        // Exactly the confusion reported: both faces show 50 and only the range distinguishes
-        // whether the next press goes up or down.
-        val loud = TileText.badge(8, 16, VolumeToggle.LOUD)
-        val quiet = TileText.badge(8, 16, VolumeToggle.QUIET)
-        assertEquals(loud, quiet)
-        assertTrue(TileText.range(VolumeToggle.LOUD) != TileText.range(VolumeToggle.QUIET))
-    }
-}
 
 /**
  * The meter's numbers, ported from TTT Mini, and the normalise gain.
@@ -373,5 +217,116 @@ class NormalizeTest {
         assertEquals("already at full level", Normalize.describe(0))
         assertEquals("boosting 19.0 dB", Normalize.describe(1900))
         assertEquals("boosting 6.5 dB", Normalize.describe(650))
+    }
+}
+
+/**
+ * The four-preset cycle, the one-character digit, and the two-letter face.
+ */
+class PresetsTest {
+
+    @Test
+    fun `the cycle steps up and wraps at the top`() {
+        assertEquals(50, Presets.next(25))
+        assertEquals(75, Presets.next(50))
+        assertEquals(100, Presets.next(75))
+        assertEquals(25, Presets.next(100))
+    }
+
+    @Test
+    fun `a level set from somewhere else lands on the next preset above it`() {
+        // 63 goes to 75, not back to the start. The alternative — snap to nearest then step —
+        // sends a level just under 75 all the way to 100.
+        assertEquals(75, Presets.next(63))
+        assertEquals(50, Presets.next(26))
+        assertEquals(25, Presets.next(0))
+    }
+
+    @Test
+    fun `the fifteen step call stream still reads as the preset it was aimed at`() {
+        // 25% of 15 steps lands on 26.7%. Half a step is about 3, so it snaps back to 25.
+        assertEquals(25, Presets.snap(27, 15))
+        assertEquals(50, Presets.snap(53, 15))
+        assertEquals(75, Presets.snap(73, 15))
+        assertEquals(100, Presets.snap(100, 15))
+    }
+
+    @Test
+    fun `a level further than half a step from a preset is reported honestly`() {
+        assertEquals(63, Presets.snap(63, 16))
+        assertEquals(38, Presets.snap(38, 16))
+    }
+
+    @Test
+    fun `the digit is the leading one, and 100 is a bare 1`() {
+        assertEquals("2", Presets.digit(25))
+        assertEquals("5", Presets.digit(50))
+        assertEquals("7", Presets.digit(75))
+        assertEquals("1", Presets.digit(100))
+    }
+
+    @Test
+    fun `the 1 collision is real and is resolved by the white state, not by the digit`() {
+        // A tenth also leads with 1. Nothing in the text can separate them, so the test pins
+        // that the STATE does: only 100 is full.
+        assertEquals("1", Presets.digit(10))
+        assertEquals("1", Presets.digit(100))
+        assertTrue(Presets.isFull(100))
+        assertEquals(false, Presets.isFull(10))
+    }
+
+    @Test
+    fun `below ten there is no leading digit to show`() {
+        assertEquals("0", Presets.digit(5))
+        assertEquals("0", Presets.digit(0))
+        assertEquals(false, Presets.isFull(0))
+    }
+
+    @Test
+    fun `full is exact at the boundary`() {
+        assertEquals(false, Presets.isFull(99))
+        assertTrue(Presets.isFull(100))
+    }
+}
+
+class FaceTest {
+
+    @Test
+    fun `two letters per channel, and all five differ`() {
+        val two = Volume.STREAMS.map { TileText.two(it.label) }
+        assertEquals(listOf("CA", "ME", "RI", "NO", "AL"), two)
+        assertEquals(5, two.toSet().size)
+        two.forEach { assertEquals(2, it.length) }
+    }
+
+    @Test
+    fun `the face is three characters, always`() {
+        assertEquals("CA1", TileText.face("Call", 100, 15))
+        assertEquals("ME5", TileText.face("Media", 50, 16))
+        assertEquals("CA2", TileText.face("Call", 27, 15))
+        listOf(25, 50, 75, 100).forEach {
+            assertEquals(3, TileText.face("Media", it, 16).length)
+        }
+    }
+
+    @Test
+    fun `a stream with no range says so rather than showing a level`() {
+        assertEquals("CA-", TileText.face("Call", 0, 0))
+        assertEquals("Call unavailable", TileText.label("Call", 0, 0))
+        assertEquals("Call has no volume range on this phone", TileText.spoken("Call", 0, 0))
+    }
+
+    @Test
+    fun `the bubble says a whole sentence, not a bare number`() {
+        // "100%" alone would not tell you which tile you pressed, which is the case it is for.
+        assertEquals("Call 100%", TileText.spoken("Call", 100, 15))
+        assertEquals("Media 25%", TileText.spoken("Media", 25, 16))
+        assertTrue(TileText.spoken("Alarm", 50, 16).startsWith("Alarm"))
+    }
+
+    @Test
+    fun `an unknown channel still yields two characters rather than crashing`() {
+        assertEquals("BL", TileText.two("Bluetooth"))
+        assertEquals("--", TileText.two("123"))
     }
 }

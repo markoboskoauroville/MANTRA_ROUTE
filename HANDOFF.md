@@ -921,3 +921,46 @@ identical**, and that is the one thing this feature must never do quietly.
 
 TEST 1: 46 green. Sabotages: reading waveform bytes as signed, and dropping the gain cap — each
 turned exactly one test red.
+
+---
+
+## v21 — one tile per channel, four presets, one line
+
+### Ten tiles became five
+
+Two tiles per channel needed a range printed on each face just to tell them apart, and that
+range spent the top third of a small circle saying something the person pressing already knew.
+One tile stepping 25 → 50 → 75 → 100 → 25 does the same work with a fifth of the furniture.
+
+`next()` steps to the first preset ABOVE where we are, so a level set from elsewhere lands
+sensibly: 63 goes to 75, not back to 25.
+
+### One line, and it is three times the ink
+
+Two letters and a digit — `CA2` — on the circle's widest chord. v20 stacked three rows and each
+was necessarily a third of the height; one row gets all of it.
+
+**One character for the level**, the leading digit: 25 is 2, 50 is 5, 75 is 7, 100 is 1.
+
+**The "1" collision is real and is resolved by colour, not by the text.** A tenth also leads
+with 1. Nothing in three characters can separate them, so the tile is dark at every level except
+100, where it goes white. That is the only thing colour is spent on, and a test pins it.
+
+### The corner is what has to fit, not the width
+
+The first attempt capped width at 96% of the square and height at 58% and came out clipped at
+the sides. A centred line sits on the diameter **only at its midline**; its top and bottom
+corners are out where the circle has already closed in.
+
+So the fit test is the one Pythagoras gives: half-width and half-height are the legs, the radius
+is the hypotenuse they must not exceed. That finds the largest text the circle can genuinely
+hold — about 80px of a 192px square for three characters — and it was found by rendering it,
+seeing letters cut off, and measuring, not by reasoning about it.
+
+### A sentence on every press
+
+`Call 100%`, as a toast. A bare number would not say which tile was pressed, and pressing the
+wrong tile without looking is exactly the case the bubble is for.
+
+TEST 1: 39 green. The suites for the two-tile model were deleted rather than adapted — they
+tested a thing that no longer exists.

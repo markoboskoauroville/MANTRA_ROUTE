@@ -3,27 +3,24 @@ package com.mantra.route
 import android.graphics.drawable.Icon
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
+import android.widget.Toast
 
 /**
- * One Quick Settings tile per volume stream, toggling between 50% and 100%.
+ * One Quick Settings tile per stream, cycling 25 → 50 → 75 → 100 → 25.
  *
- * The tiles speak on four channels for one fact, because the screenshot showed the panel
- * drawing them as bare circles with no label and no subtitle — a two-state toggle that cannot
- * be read is not a toggle, it is a coin flip:
+ * v21 halved the tile count. Two tiles per channel needed a range printed on each face to tell
+ * them apart, and that range cost the top third of a small circle to say something the person
+ * pressing already knew. One tile, four steps, and the face spends everything it has on the two
+ * things that change: which channel, and where it is.
  *
- *     SHAPE     the glyph, matched to the one the system volume panel uses for that stream
- *     NUMBER    the percentage, drawn INTO the icon, because that square is all there is
- *     WORDS     label and subtitle, for the expanded panel and for a screen reader
- *     TOUCH     a haptic tick on press
- *
- * One channel failing is then a nuisance rather than a blank circle nobody can identify.
+ * COLOUR IS SPENT ONCE. The tile is dark at every level except 100, where it goes white. It is
+ * the only state worth a channel of its own — full is the one you can hear coming — and it is
+ * also what disambiguates the digit "1", which means 100 when the tile is white and a tenth
+ * when it is dark.
  */
 abstract class VolumeTileService : TileService() {
 
     abstract val stream: Stream
-
-    /** Which two levels this tile moves between. The class carries it; the logic does not care. */
-    abstract val pair: TogglePair
 
     override fun onStartListening() {
         super.onStartListening()
@@ -33,18 +30,21 @@ abstract class VolumeTileService : TileService() {
     override fun onClick() {
         super.onClick()
         val router = Router(this)
-
         val max = router.volumeMax(stream.id)
+
         // Read the level off the phone at the moment of the press. A tile is listened to and
         // then left alone for hours; anything cached here would be a guess about the past.
-        val now = router.volumeIndex(stream.id)
+        val now = Presets.snap(router.volumeIndex(stream.id).let { Volume.percentFor(it, max) }, max)
+        val wanted = Presets.next(now)
 
-        when (val outcome = router.setVolume(stream.id, VolumeToggle.target(now, max, pair))) {
-            is Router.Outcome.Moved -> paint()
+        when (val outcome = router.setVolume(stream.id, Volume.indexFor(wanted, max))) {
+            is Router.Outcome.Moved -> {
+                paint()
+                say(TileText.spoken(stream.label, wanted, max))
+            }
             is Router.Outcome.Refused -> {
-                // A tile that refuses silently looks broken. Say it where it can be seen.
+                say(outcome.why)
                 qsTile?.let { tile ->
-                    tile.state = Tile.STATE_UNAVAILABLE
                     tile.subtitle = outcome.why.take(40)
                     tile.updateTile()
                 }
@@ -52,87 +52,52 @@ abstract class VolumeTileService : TileService() {
         }
     }
 
+    /**
+     * The bubble, on every press.
+     *
+     * A whole sentence rather than a number, because the tile is small and pressed without
+     * looking: "Call 100%" says what was touched as well as what happened, and the wrong tile
+     * pressed is exactly the case a bare "100%" would hide.
+     */
+    private fun say(sentence: String) {
+        runCatching { Toast.makeText(applicationContext, sentence, Toast.LENGTH_SHORT).show() }
+    }
+
     private fun paint() {
         val tile = qsTile ?: return
         val router = Router(this)
         val max = router.volumeMax(stream.id)
-        val index = router.volumeIndex(stream.id)
+        val percent = Presets.snap(Volume.percentFor(router.volumeIndex(stream.id), max), max)
 
         tile.state = when {
             max <= 0 -> Tile.STATE_UNAVAILABLE
-            VolumeToggle.atHigh(index, max, pair) -> Tile.STATE_ACTIVE
+            Presets.isFull(percent) -> Tile.STATE_ACTIVE
             else -> Tile.STATE_INACTIVE
         }
-        tile.label = TileText.label(stream.label, index, max, pair)
-        tile.subtitle = TileText.nextAction(index, max, pair)
-        tile.icon = Icon.createWithBitmap(
-            TileIcon.render(
-                TileText.range(pair),
-                TileText.badge(index, max, pair),
-                TileText.four(stream.label),
-            )
-        )
+        tile.label = TileText.label(stream.label, percent, max)
+        tile.subtitle = null
+        tile.icon = Icon.createWithBitmap(TileIcon.render(TileText.face(stream.label, percent, max)))
         tile.updateTile()
     }
 }
 
-/**
- * Ten concrete tiles: five streams, two toggle pairs each.
- *
- * Android requires a distinct class per tile, so this is the only place the combinations can
- * live. Ten is more than anyone will place — the picker shows them all and four or five get
- * dragged out. That clutter is the cost of not guessing which four were wanted, and it is paid
- * once, in a screen visited rarely.
- *
- * The LOUD family toggles 100/50, the QUIET family 50/25.
- */
-
+/** Five tiles, one per stream. Android requires a distinct class for each. */
 class CallVolumeTileService : VolumeTileService() {
-    override val stream = Volume.byId(0)
-    override val pair = VolumeToggle.LOUD
-}
-
-class CallQuietVolumeTileService : VolumeTileService() {
-    override val stream = Volume.byId(0)
-    override val pair = VolumeToggle.QUIET
+    override val stream = Volume.byId(0)   // STREAM_VOICE_CALL
 }
 
 class MediaVolumeTileService : VolumeTileService() {
-    override val stream = Volume.byId(3)
-    override val pair = VolumeToggle.LOUD
-}
-
-class MediaQuietVolumeTileService : VolumeTileService() {
-    override val stream = Volume.byId(3)
-    override val pair = VolumeToggle.QUIET
+    override val stream = Volume.byId(3)   // STREAM_MUSIC
 }
 
 class RingVolumeTileService : VolumeTileService() {
-    override val stream = Volume.byId(2)
-    override val pair = VolumeToggle.LOUD
-}
-
-class RingQuietVolumeTileService : VolumeTileService() {
-    override val stream = Volume.byId(2)
-    override val pair = VolumeToggle.QUIET
+    override val stream = Volume.byId(2)   // STREAM_RING
 }
 
 class NotificationVolumeTileService : VolumeTileService() {
-    override val stream = Volume.byId(5)
-    override val pair = VolumeToggle.LOUD
-}
-
-class NotificationQuietVolumeTileService : VolumeTileService() {
-    override val stream = Volume.byId(5)
-    override val pair = VolumeToggle.QUIET
+    override val stream = Volume.byId(5)   // STREAM_NOTIFICATION
 }
 
 class AlarmVolumeTileService : VolumeTileService() {
-    override val stream = Volume.byId(4)
-    override val pair = VolumeToggle.LOUD
-}
-
-class AlarmQuietVolumeTileService : VolumeTileService() {
-    override val stream = Volume.byId(4)
-    override val pair = VolumeToggle.QUIET
+    override val stream = Volume.byId(4)   // STREAM_ALARM
 }

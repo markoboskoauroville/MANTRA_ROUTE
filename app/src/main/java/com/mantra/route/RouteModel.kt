@@ -54,100 +54,97 @@ object Volume {
     /** A stream low enough to sound broken. Named as a LEVEL so it does not read as a fault. */
     fun isLow(index: Int, max: Int): Boolean = max > 0 && percentFor(index, max) <= 25
 
-    /**
-     * The number to SHOW, which is not always the number measured.
-     *
-     * Reported 25.8.2026: a tile asked for 25% displayed 27%. Not a rounding bug — the Call
-     * stream has FIFTEEN steps where every other stream has sixteen. 25% of 15 is 3.75, which
-     * lands on step 4, and step 4 of 15 is 26.7%. The tile was reporting the truth and the
-     * truth was useless: a control offering 25 and 50 must say 25 and 50, or the two ends
-     * cannot be told apart at a glance.
-     *
-     * So when the measured level is within half a step of an end of the pair — the closest the
-     * hardware can get — the tile shows the end it was aiming at. Further away than that and it
-     * shows what is really there, because then the level came from somewhere else and saying
-     * "50" would be a lie rather than a rounding.
-     */
-    fun displayPercent(index: Int, max: Int, pair: TogglePair): Int {
-        if (max <= 0) return 0
-        val actual = percentFor(index, max)
-        val halfStep = Math.round(50.0 / max).toInt().coerceAtLeast(1)
-        listOf(pair.high, pair.low).forEach { end ->
-            if (Math.abs(actual - end) <= halfStep) return end
-        }
-        return actual
-    }
 }
 
 /**
- * The two levels a tile moves between.
+ * Four preset levels, cycled by one tile.
  *
- * The switching point is the MIDPOINT of the pair, not the top of it. `if (index == high) low
- * else high` discards a level sitting between the two — a stream at 87% would be raised to 100%
- * instead of halved. Midpoint means two presses always return you to where you started.
+ * v21 replaced the two-tile arrangement. Two tiles per channel meant ten tiles, a range printed
+ * on each face to tell them apart, and two things to find in the picker for one job. One tile
+ * that steps through 25, 50, 75, 100 and wraps does the same work with a fifth of the furniture
+ * and no range to read.
  */
-data class TogglePair(val high: Int, val low: Int) {
-    init { require(high > low) { "high must exceed low: $high, $low" } }
-    val midpoint: Int get() = (high + low) / 2
-}
+object Presets {
 
-object VolumeToggle {
+    val LEVELS = listOf(25, 50, 75, 100)
 
-    val LOUD = TogglePair(high = 100, low = 50)
-    val QUIET = TogglePair(high = 50, low = 25)
+    /**
+     * The next level up, wrapping at the top.
+     *
+     * Strictly greater than where we are, so a level set from somewhere else lands on the next
+     * preset above it rather than jumping to the start. 63 goes to 75, not to 25.
+     */
+    fun next(percent: Int): Int = LEVELS.firstOrNull { it > percent } ?: LEVELS.first()
 
-    fun atHigh(index: Int, max: Int, pair: TogglePair): Boolean =
-        max > 0 && Volume.percentFor(index, max) >= pair.midpoint
+    /**
+     * The level to SHOW, which is not always the level measured.
+     *
+     * The Call stream has fifteen steps where the others have sixteen, so 25% lands on step 4
+     * which is 26.7%. Within half a step of a preset, the preset is what the tile aimed at and
+     * what it should say; beyond that the level came from elsewhere and is reported as it is.
+     */
+    fun snap(percent: Int, max: Int): Int {
+        if (max <= 0) return 0
+        val halfStep = Math.round(50.0 / max).toInt().coerceAtLeast(1)
+        return LEVELS.firstOrNull { Math.abs(percent - it) <= halfStep } ?: percent
+    }
 
-    fun target(index: Int, max: Int, pair: TogglePair): Int =
-        if (atHigh(index, max, pair)) Volume.indexFor(pair.low, max)
-        else Volume.indexFor(pair.high, max)
+    /**
+     * One character for the level, because a whole line has to hold two letters AND a number.
+     *
+     * 25 is "2", 50 is "5", 75 is "7", and 100 is "1" — the leading digit in every case.
+     *
+     * "1" therefore means 100 and could also mean 10-something. That collision is real and is
+     * resolved by COLOUR: the tile is only ever white at 100, so a dark "1" is a tenth and a
+     * white "1" is full. It is the one thing colour is spent on here.
+     */
+    fun digit(percent: Int): String = when {
+        percent >= 100 -> "1"
+        percent >= 10 -> (percent / 10).toString()
+        else -> "0"
+    }
 
-    /** The number drawn in the middle of the tile. No percent sign; the size is worth more. */
-    fun face(index: Int, max: Int, pair: TogglePair): String =
-        if (max <= 0) "--" else Volume.displayPercent(index, max, pair).toString()
+    /** Full only at the top. The single state the tile paints. */
+    fun isFull(percent: Int): Boolean = percent >= 100
 }
 
 object TileText {
 
     /**
-     * Four letters, because that is what fits under a number on a tile.
+     * TWO letters, not four.
      *
-     * Chosen by hand rather than truncated: "ALARM".take(4) gives "ALAR", which reads as
-     * nothing. A short list of real names beats a clever rule.
+     * The face is one line now and the level's digit has to share it, so the name gets two
+     * characters and the digit gets one. Two is enough to tell five channels apart when they
+     * are the only five there are.
      */
-    private val FOUR = mapOf(
-        "Call" to "CALL",
-        "Media" to "MEDI",
-        "Ring" to "RING",
-        "Notification" to "NOTF",
-        "Alarm" to "ALRM",
+    private val TWO = mapOf(
+        "Call" to "CA",
+        "Media" to "ME",
+        "Ring" to "RI",
+        "Notification" to "NO",
+        "Alarm" to "AL",
     )
 
-    fun four(name: String): String =
-        FOUR[name] ?: name.filter { it.isLetter() }.take(4).uppercase().ifEmpty { "----" }
+    fun two(name: String): String =
+        TWO[name] ?: name.filter { it.isLetter() }.take(2).uppercase().ifEmpty { "--" }
 
-    fun badge(index: Int, max: Int, pair: TogglePair): String = VolumeToggle.face(index, max, pair)
+    /** The whole face: two letters and one digit, on one line. */
+    fun face(name: String, percent: Int, max: Int): String =
+        if (max <= 0) two(name) + "-" else two(name) + Presets.digit(Presets.snap(percent, max))
+
+    /** The label, where a panel shows one. */
+    fun label(name: String, percent: Int, max: Int): String =
+        if (max <= 0) "$name unavailable" else "$name ${Presets.snap(percent, max)}%"
 
     /**
-     * The range, so the two tiles for one channel can be told apart without pressing either.
+     * The sentence the bubble says on every press.
      *
-     * "I know which button does what. Now there is no range, I'm confused." Both tiles for a
-     * channel can read 50, and with only the current value on the face there is nothing to say
-     * whether the next press goes to 25 or to 100.
+     * A whole sentence, not a number: the tile is small and pressed without looking, and
+     * "Call 100%" tells you what you touched as well as what happened. "100%" alone would not.
      */
-    fun range(pair: TogglePair): String = "${pair.low}/${pair.high}"
-
-    fun label(name: String, index: Int, max: Int, pair: TogglePair): String =
-        if (max <= 0) "$name unavailable"
-        else "$name ${Volume.displayPercent(index, max, pair)}%  (${range(pair)})"
-
-    /** A control says what the NEXT press does. */
-    fun nextAction(index: Int, max: Int, pair: TogglePair): String = when {
-        max <= 0 -> "no range on this device"
-        VolumeToggle.atHigh(index, max, pair) -> "tap for ${pair.low}%"
-        else -> "tap for ${pair.high}%"
-    }
+    fun spoken(name: String, percent: Int, max: Int): String =
+        if (max <= 0) "$name has no volume range on this phone"
+        else "$name ${Presets.snap(percent, max)}%"
 }
 
 /**
