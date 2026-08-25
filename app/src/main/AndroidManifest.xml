@@ -38,6 +38,21 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!--
+              LONG PRESS ON A TILE OPENS THIS SCREEN.
+
+              Without this filter Android has nowhere to send a long press and falls back to
+              App Info, which is a settings page about the app rather than the app. Declaring
+              it makes every one of the five tiles a way into the sliders — the tile for a
+              quick change, the long press for the whole picture.
+
+              Confirmed against AudioOutputSwitcher, which uses exactly this action for exactly
+              this purpose, rather than taken from memory.
+            -->
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
+            </intent-filter>
         </activity>
 
         <!-- The Quick Settings tile. TILE=false so it is not force-added; it is placed by

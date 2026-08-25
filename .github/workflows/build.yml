@@ -97,6 +97,18 @@ jobs:
           echo "G4b: $CHECKED custom views in layouts checked"
           if [ "$FAIL" -ne 0 ]; then echo "G4b BLOCKS: a layout names a view that cannot be inflated"; exit 1; fi
 
+      # A long press on a tile has to land somewhere. Without a QS_TILE_PREFERENCES activity
+      # Android silently falls back to App Info, which looks like a deliberate choice and is
+      # not one. Nothing else in the build notices its absence.
+      - name: G4c — long press on a tile has a destination
+        run: |
+          if grep -q "android.service.quicksettings.action.QS_TILE_PREFERENCES" app/src/main/AndroidManifest.xml; then
+            echo "G4c: tile preferences activity declared, long press opens the app"
+          else
+            echo "G4c BLOCKS: no QS_TILE_PREFERENCES activity — long press would open App Info"
+            exit 1
+          fi
+
       - name: Assemble
         env:
           MANTRA_KEYSTORE: ${{ steps.ks.outputs.have == 'true' && format('{0}/mantra_route.jks', runner.temp) || '' }}

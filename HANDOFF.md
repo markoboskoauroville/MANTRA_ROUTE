@@ -1054,3 +1054,24 @@ never landed off a stop. Sabotages: reversing without moving, and requiring an e
 **G8 note:** this version introduces the first persisted state since v18. It is one boolean per
 stream under `mantra_route_tiles`. Nothing reads it but the tile, a missing value means "up",
 and a corrupt value cannot be corrupt — `getBoolean` has a default.
+
+---
+
+## v25 — long press on a tile opens the app
+
+Reported: long pressing a tile opened App Info rather than Mantra Route.
+
+That is Android's fallback, not a choice. A long press is routed to an activity declaring
+`android.service.quicksettings.action.QS_TILE_PREFERENCES`; with none declared the system has
+nowhere to send it and shows the app's settings page instead. **Nothing in the build notices the
+absence** — it compiles, packages and installs with a long press that quietly goes somewhere
+useless.
+
+`MainActivity` now declares it, so every one of the five tiles is a way in: the tile for a quick
+change, the long press for the whole picture.
+
+The action name was confirmed against `AudioOutputSwitcher`, whose manifest was read directly,
+rather than written from memory.
+
+**G4c** added: the build fails if no QS_TILE_PREFERENCES activity is declared. Proven to fail by
+renaming the action and watching it go red.
