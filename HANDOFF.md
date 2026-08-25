@@ -762,3 +762,49 @@ shrinking.
 TEST 1: 84 green. Four v14/v15 tests broke on the signature and format changes and were
 **updated rather than deleted** — including one that existed twice under the same name, which
 is why a first fix appeared not to take.
+
+---
+
+## v18 — Shizuku removed entirely, and the tile text reaches the edges
+
+### Why it had to go, in his words
+
+"Shizuku is gone forever." Shizuku is started over adb, which on a phone means Wireless
+debugging, which means Wi-Fi and a fresh pairing after every reboot. Baba is often without
+Wi-Fi. A feature that cannot be reached is not a feature, however well it works on the bench.
+
+### Deleted
+
+`Shell.kt`, `Probe.kt`, `State.kt`, the Shizuku Gradle dependency, the `ShizukuProvider`, the
+`MODIFY_AUDIO_ROUTING` and `MEDIA_ROUTING_CONTROL` permissions, `BLUETOOTH_CONNECT`, five
+layouts, and with them the whole "what this phone allows" screen, the patch bay, the output
+arrangement list, mono downmix, left/right balance and the call release.
+
+`RouteModel.kt` went from 700+ lines to 149; `MainActivity.kt` from 520+ to 172; `Router.kt` to
+57. The test suite was rewritten rather than patched — it tested Outputs, the patch bay, the
+stereo blend and the shell parser, none of which exist. **A test kept alive for code that has
+gone is a green light nobody is reading.**
+
+### What is left, and what it needs
+
+Five volume sliders, a Do Not Disturb shortcut, a report to paste, and ten Quick Settings tiles.
+**Two permissions in the whole app:** `MODIFY_AUDIO_SETTINGS` and `ACCESS_NOTIFICATION_POLICY`.
+Neither needs a computer.
+
+`Need` now has two entries and neither is SHIZUKU, with a test asserting the enum size — the
+guard against it creeping back as a third.
+
+### The tile face reaches the edges
+
+v17 kept polite margins that looked right at 192px and disappeared once the system shrank the
+icon into the tile circle. The number is now GROWN until it hits the width or its band, rather
+than started large and shrunk: "50" is two digits and "100" is three, and shrink-to-fit left the
+two-digit case at the size only the three-digit case needed.
+
+The digits are centred on their INK, not on the font's line box — the box carries ascender and
+descender room that digits never use, so centring on it sits visibly high.
+
+**NOT VERIFIED:** whether Quick Settings masks a tile icon to a circle. The number sits at the
+vertical middle where a circle is widest, so it is safe either way, but the four-letter name at
+the bottom is held to 72% width in case it is clipped. Erring narrow costs a few points of size;
+erring wide loses letters, and a lost letter cannot be recovered by looking.

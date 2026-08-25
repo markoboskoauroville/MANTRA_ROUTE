@@ -16,20 +16,10 @@
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <!-- Without this the platform reports Bluetooth outputs with an empty name and address,
          which is what turns two pairs of earbuds into one unnameable row. -->
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
     <!-- Declared so `pm grant` has something to move. It is signature|privileged and is
          expected to stay ungranted; the probe records the refusal rather than assuming it. -->
-    <!-- The app-op probe came back "default" on Android 36: set silently did nothing. An
-         app-op is attached to a permission the package DECLARES; without this line there was
-         nothing for `appops set` to attach to. Declared so the grant has a target. -->
-    <uses-permission
-        android:name="android.permission.MEDIA_ROUTING_CONTROL"
-        tools:ignore="ProtectedPermissions" />
 
-    <uses-permission
-        android:name="android.permission.MODIFY_AUDIO_ROUTING"
-        tools:ignore="ProtectedPermissions" />
 
     <application
         android:allowBackup="false"
@@ -57,13 +47,6 @@
              exists so `cmd notification allow_listener` has a component to allow, which is
              the only way to learn which app is playing without a privileged permission. -->
 
-        <provider
-            android:name="rikka.shizuku.ShizukuProvider"
-            android:authorities="${applicationId}.shizuku"
-            android:multiprocess="false"
-            android:enabled="true"
-            android:exported="true"
-            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
 
 

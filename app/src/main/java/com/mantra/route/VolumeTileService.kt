@@ -34,15 +34,14 @@ abstract class VolumeTileService : TileService() {
     override fun onClick() {
         super.onClick()
         val router = Router(this)
-        val caps = State(this).capabilities()
 
         val max = router.volumeMax(stream.id)
         // Read the level off the phone at the moment of the press. A tile is listened to and
         // then left alone for hours; anything cached here would be a guess about the past.
         val now = router.volumeIndex(stream.id)
 
-        when (val outcome = router.setVolume(stream.id, VolumeToggle.target(now, max, pair), caps)) {
-            is Router.Outcome.Moved, is Router.Outcome.Partial -> paint()
+        when (val outcome = router.setVolume(stream.id, VolumeToggle.target(now, max, pair))) {
+            is Router.Outcome.Moved -> paint()
             is Router.Outcome.Refused -> {
                 // A tile that refuses silently looks broken. Say it where it can be seen.
                 qsTile?.let { tile ->

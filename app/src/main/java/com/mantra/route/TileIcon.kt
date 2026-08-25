@@ -5,35 +5,42 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.Typeface
 import androidx.core.content.ContextCompat
 
 /**
  * The face of a Quick Settings tile, drawn as a bitmap.
  *
- * Quick Settings gives a tile one small square and, on this phone, draws nothing else — no
- * label, no subtitle. So everything the tile has to say has to fit inside that square.
+ * Quick Settings gives a tile ONE small square and draws nothing else on this phone — no label,
+ * no subtitle. Whatever the tile has to say has to fit inside that square, and the square is
+ * then scaled down into the circle, so every pixel of margin is magnified into wasted space.
  *
- * Three zones, top to bottom, asked for on 24.8.2026:
- *
- *     GLYPH    small, at the top — which channel, recognised by shape
- *     NUMBER   large, in the middle — the level, the thing you are actually reading
- *     NAME     four letters at the bottom — which channel, in words
- *
- * The channel is therefore said twice, in two different ways. That is the point rather than
- * redundancy: shape is faster once learned, letters are unambiguous while learning, and a
- * reader who finds one hard has the other.
+ * v18: the text now reaches the edges. v17 kept polite margins that looked right at 192px and
+ * vanished once the system shrank the icon into the tile. The number is measured and scaled to
+ * the full width, and the bands below sum to the whole square with nothing spare.
  */
 object TileIcon {
 
     private const val SIZE = 192f
 
-    // Bands as fractions of the square. They sum to less than 1: the gaps are the margins,
-    // and a number that touches the glyph above it is harder to read than a smaller one.
-    private const val GLYPH_TOP = 0.06f
-    private const val GLYPH_HEIGHT = 0.26f
-    private const val NUMBER_BASELINE = 0.72f
-    private const val NAME_BASELINE = 0.96f
+    // Bands as fractions of the square, summing to 1.0. No decorative gaps: at tile size a gap
+    // is invisible as a gap and visible only as smaller text.
+    private const val GLYPH_TOP = 0.00f
+    private const val GLYPH_HEIGHT = 0.22f
+    private const val NUMBER_BAND_TOP = 0.22f
+    private const val NUMBER_BAND_HEIGHT = 0.54f
+    private const val NAME_BASELINE = 0.98f
+
+    // The number sits at the vertical MIDDLE, where a circular mask is at its widest, so it can
+    // run the full width safely. The name sits at the bottom, where a circle has closed in to
+    // roughly 44% of the width — so it is held back.
+    //
+    // NOT VERIFIED ON A DEVICE: whether Quick Settings masks a tile icon to a circle at all. If
+    // it does not, the name could be wider than this. Erring narrow costs a few points of size;
+    // erring wide loses letters, which is not recoverable by looking.
+    private const val NUMBER_MAX_WIDTH = 0.98f
+    private const val NAME_MAX_WIDTH = 0.72f
 
     fun render(context: Context, glyphRes: Int, number: String, name: String): Bitmap {
         val size = SIZE.toInt()
@@ -49,35 +56,45 @@ object TileIcon {
             drawable.draw(canvas)
         }
 
-        // The number. Bold and large: it is what the tile is for.
+        // The number, grown until it touches both edges or fills its band, whichever binds
+        // first. GROWN rather than shrunk: "50" is two digits and "100" is three, and starting
+        // large and shrinking would leave "50" at the size that only "100" needed.
         val numberPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
-            textSize = SIZE * 0.40f
         }
-        // Shrink to fit rather than clip: "100" is wider than "50" and must not lose a digit.
-        fit(numberPaint, number, SIZE * 0.90f)
-        canvas.drawText(number, SIZE / 2f, SIZE * NUMBER_BASELINE, numberPaint)
+        grow(numberPaint, number, SIZE * NUMBER_MAX_WIDTH, SIZE * NUMBER_BAND_HEIGHT)
+        val bounds = Rect()
+        numberPaint.getTextBounds(number, 0, number.length, bounds)
+        // Centre the ink of the digits in the band, not the font's line box: the box carries
+        // ascender and descender room that digits never use, and centring on it sits high.
+        val bandCentre = SIZE * (NUMBER_BAND_TOP + NUMBER_BAND_HEIGHT / 2f)
+        canvas.drawText(number, SIZE / 2f, bandCentre + bounds.height() / 2f, numberPaint)
 
-        // The name. Small, letter-spaced, and never more than four characters.
         val namePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
-            textSize = SIZE * 0.19f
-            letterSpacing = 0.08f
+            letterSpacing = 0.02f
         }
-        fit(namePaint, name, SIZE * 0.94f)
-        canvas.drawText(name, SIZE / 2f, SIZE * NAME_BASELINE, namePaint)
+        grow(namePaint, name, SIZE * NAME_MAX_WIDTH, SIZE * (1f - NUMBER_BAND_TOP - NUMBER_BAND_HEIGHT))
+        canvas.drawText(name, SIZE / 2f, SIZE * NAME_BASELINE - namePaint.descent(), namePaint)
 
         return bitmap
     }
 
-    /** Reduce the size until the text fits the width, with a floor so it never vanishes. */
-    private fun fit(paint: Paint, text: String, maxWidth: Float) {
-        while (paint.measureText(text) > maxWidth && paint.textSize > 8f) {
-            paint.textSize -= 1f
+    /** Raise the text size until it hits the width or the height of its band. */
+    private fun grow(paint: Paint, text: String, maxWidth: Float, maxHeight: Float) {
+        if (text.isEmpty()) return
+        var size = 4f
+        while (size < 200f) {
+            paint.textSize = size + 1f
+            val bounds = Rect()
+            paint.getTextBounds(text, 0, text.length, bounds)
+            if (paint.measureText(text) > maxWidth || bounds.height() > maxHeight) break
+            size += 1f
         }
+        paint.textSize = size
     }
 }
