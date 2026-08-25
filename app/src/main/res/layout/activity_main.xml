@@ -11,6 +11,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/ground"
+    android:clipChildren="false"
+    android:clipToPadding="false"
     android:orientation="vertical"
     android:paddingStart="20dp"
     android:paddingEnd="20dp"
@@ -26,8 +28,11 @@
         android:padding="10dp"
         android:src="@drawable/ic_settings" />
 
+    <!-- clipChildren=false so a row's bubble can be drawn outside that row. -->
     <LinearLayout
         android:id="@+id/volume_rows"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"

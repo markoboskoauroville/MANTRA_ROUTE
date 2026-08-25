@@ -203,6 +203,14 @@ class MainActivity : AppCompatActivity() {
         val thumbCentre = bar.paddingLeft + travel * fraction
         val x = thumbCentre - bubble.width / 2f
         bubble.translationX = x.coerceIn(0f, (bar.width - bubble.width).toFloat())
+
+        // Lifted clear of the slider rather than given room inside the row. Reserving space
+        // separated every slider from its own label; drawing outside costs nothing as long as
+        // no ancestor clips.
+        val gap = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP, 10f, resources.displayMetrics,
+        )
+        bubble.translationY = -(bubble.height + gap)
     }
 
     private fun color(id: Int) = ContextCompat.getColor(this, id)

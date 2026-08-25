@@ -1259,3 +1259,24 @@ down, so the two can never disagree.
 
 G4 to a fixed point in one pass: 13 functions, 0 dead, 0 unreferenced drawables.
 TEST 1: 41 green.
+
+---
+
+## v36 — scaling fixed: the bubble was taking a row's worth of space
+
+v35 reserved 64dp above every slider for the key-preview bubble. Measured:
+
+    header 30 + gap 6 + slider 56              =  92dp of content
+    plus the reserved bubble                   = 156dp per row
+    available on a 640-840dp screen, five rows = 106 to 146dp per row
+
+So every row overflowed its share. The sliders were pushed down away from their own labels and
+towards the NEXT row's, which is why the labels and sliders stopped reading as pairs, and the
+last slider ran off the bottom of the screen.
+
+The bubble now reserves nothing and is drawn OUTSIDE the row, lifted by `translationY`, with
+`clipChildren="false"` on the FrameLayout, the row, the row container and the root so nothing
+crops it. Back to 92dp of content per row, which fits with room to spare on every size checked.
+
+**A floating thing should float. Giving it a seat costs that seat on every row, for ever,
+whether or not anything is in it.**

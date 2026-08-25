@@ -1,14 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  One channel: its glyph, its name, and a slider whose thumb carries the number — with a
-  key-preview bubble that rises above the finger while dragging, because the finger is sitting
-  on the one number being changed.
+  One channel: glyph, name, and the slider directly beneath them.
+
+  The bubble reserves NO space. v35 gave it a 64dp margin above the slider, which pushed every
+  slider away from its own label and down towards the next row's — the labels and the sliders
+  stopped reading as pairs, and the last row ran off the bottom of the screen.
+
+  It is drawn outside the row instead, with clipChildren="false" all the way up so nothing
+  crops it.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center_vertical">
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:gravity="center_vertical"
+    android:orientation="vertical">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -35,15 +42,19 @@
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="6dp"
         android:clipChildren="false"
         android:clipToPadding="false">
 
-        <!--
-          Reserved space at the top so the bubble has somewhere to go. It is INVISIBLE rather
-          than GONE at rest: gone would collapse the row and every slider on screen would jump
-          the moment a finger touched one.
-        -->
+        <SeekBar
+            android:id="@+id/volume_bar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="100"
+            android:progressDrawable="@drawable/slider_track"
+            android:splitTrack="false"
+            android:thumbOffset="0dp" />
+
         <TextView
             android:id="@+id/volume_bubble"
             android:layout_width="wrap_content"
@@ -54,22 +65,11 @@
             android:minWidth="84dp"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
-            android:paddingTop="6dp"
-            android:paddingBottom="6dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
             android:textColor="@color/ground"
-            android:textSize="34sp"
+            android:textSize="32sp"
             android:textStyle="bold"
             android:visibility="invisible" />
-
-        <SeekBar
-            android:id="@+id/volume_bar"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom"
-            android:layout_marginTop="64dp"
-            android:max="100"
-            android:progressDrawable="@drawable/slider_track"
-            android:splitTrack="false"
-            android:thumbOffset="0dp" />
     </FrameLayout>
 </LinearLayout>
