@@ -856,3 +856,68 @@ output drawables are now unused by the tiles.
 
 TEST 1: 33 green. Sabotage: switching the snap tolerance to zero turns the 27 case red and
 nothing else.
+
+---
+
+## v20 — the VU meter, normalise and boost
+
+### One meter, not five, and why
+
+Asked for: a meter under every volume row. **There is one output mix.** `Visualizer` may attach
+to the global session (0) or to a session this app owns, and to nothing else — it cannot attach
+to Tidal's session, so it cannot tell which of the five streams a sample came from. Five meters
+would be one number drawn five times, and four of them would be lying about being independent.
+`LoudnessEnhancer` on session 0 is one gain applied once, globally, for the same reason.
+
+So: one meter, one Normalize, one Boost, in a section headed "Output mix" that says so on the
+face of it. **If five is still wanted, say so and it is a five-line change** — but they will all
+move together, and that seemed worth saying before building it rather than after.
+
+### The meter is HIS meter
+
+Ported from `MaRecordingLine.kt` in TTT_MINI, not re-implemented: the −54 dB floor, the dB
+conversion, the asymmetric smoothing (instant attack, 0.3 release), the peak decaying 0.6 dB a
+frame, the 40 ms tick and the three colours are unchanged. Two meters that merely look similar
+would disagree about how loud something is.
+
+One trap the tests pin: **waveform bytes are UNSIGNED, centred on 128.** Reading them as signed
+puts silence at −128 and pins the meter at full scale, which is the classic way this looks like
+it works.
+
+### Normalise
+
+Watches for 2.5 seconds and keeps the highest peak, because a single 40 ms frame on a quiet
+passage is silence and would ask for the full twenty decibels. Then gain = target − peak, where
+the target is **−1 dB rather than 0**: digital audio clips hard, and a windowed peak is not the
+highest sample that will ever arrive.
+
+Gated at both ends. Below −50 dB there is nothing playing and the answer is zero, not gain.
+Above the target there is nothing to gain. And the whole thing is capped at 20 dB, so a
+near-silent passage cannot ask for forty and bring the noise floor up with it.
+
+### Boost
+
+The checkbox does not measure. It puts back, or removes, the gain normalise already found, so
+unticking is instant and total — the reason to untick it is that the room just got too loud.
+Ticking it with nothing measured refuses and says so rather than doing nothing.
+
+It is ticked because a gain was found AND applied: it reports a fact, it does not announce an
+intention.
+
+### RECORD_AUDIO, and being blunt about it
+
+A meter of the system output reads it through `Visualizer`, and Android guards that with the
+microphone permission because the same API could be pointed at a microphone. The app never opens
+one, never records, never writes audio anywhere; the only consumer is the peak the bar is drawn
+from. "An audio app wants your microphone" is exactly the request a person should be suspicious
+of, so it is asked for at the moment the meter is used, not at launch.
+
+### NOT VERIFIED
+
+Neither effect has run on a device. Both attach to session 0, which since Android 9 needs
+RECORD_AUDIO and the app in the foreground, and some builds refuse it outright. Every failure is
+printed to the line under the meter by exception name — **a dead meter and a silent room look
+identical**, and that is the one thing this feature must never do quietly.
+
+TEST 1: 46 green. Sabotages: reading waveform bytes as signed, and dropping the gain cap — each
+turned exactly one test red.

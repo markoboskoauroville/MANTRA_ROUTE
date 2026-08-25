@@ -278,3 +278,100 @@ class DisplayTest {
         assertTrue(TileText.range(VolumeToggle.LOUD) != TileText.range(VolumeToggle.QUIET))
     }
 }
+
+/**
+ * The meter's numbers, ported from TTT Mini, and the normalise gain.
+ */
+class MeterTest {
+
+    @Test
+    fun `silence sits on the floor, not below it`() {
+        assertEquals(Meter.FLOOR_DB, Meter.toDb(0f), 0.01f)
+        assertEquals(Meter.FLOOR_DB, Meter.toDb(0.0001f), 0.01f)
+        assertEquals(0f, Meter.norm(Meter.FLOOR_DB), 0.01f)
+    }
+
+    @Test
+    fun `full scale is zero dB and the top of the bar`() {
+        assertEquals(0f, Meter.toDb(1f), 0.01f)
+        assertEquals(1f, Meter.norm(0f), 0.01f)
+    }
+
+    @Test
+    fun `half amplitude is about six dB down, which is the arithmetic that makes it a meter`() {
+        assertEquals(-6.02f, Meter.toDb(0.5f), 0.05f)
+    }
+
+    @Test
+    fun `a negative sample reads the same as its positive twin`() {
+        // Waveform data swings both ways; a meter that only saw one half would read 6 dB low.
+        assertEquals(Meter.toDb(0.5f), Meter.toDb(-0.5f), 0.001f)
+    }
+
+    @Test
+    fun `attack is instant and release is gradual`() {
+        assertEquals(-10f, Meter.smooth(-40f, -10f), 0.01f)      // rises at once
+        val falling = Meter.smooth(-10f, -40f)
+        assertTrue("must fall", falling < -10f)
+        assertTrue("must not snap", falling > -40f)
+    }
+
+    @Test
+    fun `the peak mark holds then decays, and never below the floor`() {
+        assertEquals(-5f, Meter.decayPeak(-20f, -5f), 0.01f)
+        assertEquals(-5.6f, Meter.decayPeak(-5f, -50f), 0.01f)
+        assertEquals(Meter.FLOOR_DB, Meter.decayPeak(Meter.FLOOR_DB, Meter.FLOOR_DB), 0.01f)
+    }
+
+    @Test
+    fun `the three colours change at the documented thresholds, both sides`() {
+        assertEquals(0xFF56D364.toInt(), Meter.colourFor(-12.1f))
+        assertEquals(0xFFF0883E.toInt(), Meter.colourFor(-11.9f))
+        assertEquals(0xFFF0883E.toInt(), Meter.colourFor(-3.1f))
+        assertEquals(0xFF9B3B33.toInt(), Meter.colourFor(-2.9f))
+    }
+}
+
+class NormalizeTest {
+
+    @Test
+    fun `silence yields no gain, because a gain computed from silence is noise`() {
+        assertEquals(0, Normalize.gainMb(Meter.FLOOR_DB))
+        assertEquals(0, Normalize.gainMb(-60f))
+        assertEquals(false, Normalize.hasSignal(-60f))
+    }
+
+    @Test
+    fun `a quiet signal is lifted to just under full scale`() {
+        // -20 dB peak needs 19 dB to reach the -1 dB target. 1900 millibels.
+        assertEquals(1900, Normalize.gainMb(-20f))
+        assertEquals(900, Normalize.gainMb(-10f))
+    }
+
+    @Test
+    fun `something already loud is left alone rather than pushed into clipping`() {
+        assertEquals(0, Normalize.gainMb(-1f))
+        assertEquals(0, Normalize.gainMb(-0.5f))
+        assertEquals(0, Normalize.gainMb(0f))
+    }
+
+    @Test
+    fun `gain is capped, so a near-silent passage cannot ask for forty decibels`() {
+        // -49 dB is just above the silence gate, and would want 48 dB without the cap.
+        assertTrue(Normalize.hasSignal(-49f))
+        assertEquals(Normalize.MAX_GAIN_MB, Normalize.gainMb(-49f))
+    }
+
+    @Test
+    fun `the silence gate is exact on both sides`() {
+        assertEquals(false, Normalize.hasSignal(Normalize.SILENCE_DB))
+        assertTrue(Normalize.hasSignal(Normalize.SILENCE_DB + 0.1f))
+    }
+
+    @Test
+    fun `the description speaks decibels, because millibels mean nothing to a reader`() {
+        assertEquals("already at full level", Normalize.describe(0))
+        assertEquals("boosting 19.0 dB", Normalize.describe(1900))
+        assertEquals("boosting 6.5 dB", Normalize.describe(650))
+    }
+}
