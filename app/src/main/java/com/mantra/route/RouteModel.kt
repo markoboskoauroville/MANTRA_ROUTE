@@ -68,13 +68,6 @@ object Presets {
 
     val LEVELS = listOf(25, 50, 75, 100)
 
-    /**
-     * The next level up, wrapping at the top.
-     *
-     * Strictly greater than where we are, so a level set from somewhere else lands on the next
-     * preset above it rather than jumping to the start. 63 goes to 75, not to 25.
-     */
-    fun next(percent: Int): Int = LEVELS.firstOrNull { it > percent } ?: LEVELS.first()
 
 
     /** The steps this stream can actually reach, de-duplicated and in order. */

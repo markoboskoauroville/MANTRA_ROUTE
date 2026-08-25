@@ -12,23 +12,6 @@ import org.junit.Test
 class PresetsTest {
 
     @Test
-    fun `the cycle steps up and wraps at the top`() {
-        assertEquals(50, Presets.next(25))
-        assertEquals(75, Presets.next(50))
-        assertEquals(100, Presets.next(75))
-        assertEquals(25, Presets.next(100))
-    }
-
-    @Test
-    fun `a level set from somewhere else lands on the next preset above it`() {
-        // 63 goes to 75, not back to the start. The alternative — snap to nearest then step —
-        // sends a level just under 75 all the way to 100.
-        assertEquals(75, Presets.next(63))
-        assertEquals(50, Presets.next(26))
-        assertEquals(25, Presets.next(0))
-    }
-
-    @Test
     fun `the fifteen step call stream still reads as the preset it was aimed at`() {
         // 25% of 15 steps lands on 26.7%. Half a step is about 3, so it snaps back to 25.
         assertEquals(25, Presets.snap(27, 15))

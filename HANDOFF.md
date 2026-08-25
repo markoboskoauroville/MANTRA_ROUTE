@@ -1133,3 +1133,31 @@ underneath, including the tile that put it there. The view is reused rather than
 every press would leak a window and stack stale lines down the screen.
 
 TEST 1: 46 green.
+
+---
+
+## v30/v31/v32 — one-line face restored, and three passes to clear the dead code
+
+### The two-line face measured better and looked worse
+
+v28 split the face onto two lines because width was the binding constraint and the letter could
+then reach 106px against 62px. Rejected on sight: a large letter above a small number reads as
+two stacked things rather than one label, and the number — the part actually being read — ended
+up the smaller of the two. **A measurement is not a judgement.** Back to one uniform-size line
+with per-face condensing.
+
+### Dead code was cleared one version at a time, which is the wrong way round
+
+The revert left `TileText.level` behind. Removing that exposed `Presets.nextIndex`, superseded
+by `Elevator.step`. Removing that exposed `Presets.next`. Three versions, three passes, each
+shipping with something dead still in it.
+
+**The gate module's §15a says run the analyser again after every fix. It does not say run it to
+a FIXED POINT, and it should.** G4 is now run in a loop until it reports zero, which took three
+passes here and would have taken one version instead of three.
+
+Their tests were repointed, not deleted, where they guarded something real: `CycleTest` still
+asserts that no stream can sit on one level while every press appears to work — it just walks
+`Elevator.step` now instead of the retired function it was written against.
+
+TEST 1: 44 green. Elevator fuzz 800,000 presses, 0 faults. G4: 14 model functions, 0 dead.
