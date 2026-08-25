@@ -39,6 +39,7 @@ class MainActivity : AppCompatActivity() {
         val label: TextView,
         val bar: SeekBar,
         val thumb: ThumbDrawable,
+        val bubble: TextView,
     )
 
     /** The glyph for each channel, matched to the one the system volume panel uses. */
@@ -115,6 +116,7 @@ class MainActivity : AppCompatActivity() {
             ).toInt()
             val thumb = ThumbDrawable(thumbPx)
             bar.thumb = thumb
+            val bubble = view.findViewById<TextView>(R.id.volume_bubble)
 
             bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(b: SeekBar, p: Int, fromUser: Boolean) {
@@ -125,12 +127,22 @@ class MainActivity : AppCompatActivity() {
                     // system call per pixel; drawing a number is not.
                     if (!fromUser) return
                     thumb.label = p.toString()
+                    bubble.text = "$p%"
+                    positionBubble(b, bubble)
                 }
 
-                override fun onStartTrackingTouch(b: SeekBar) = Unit
+                override fun onStartTrackingTouch(b: SeekBar) {
+                    bubble.text = "${b.progress}%"
+                    bubble.visibility = View.VISIBLE
+                    positionBubble(b, bubble)
+                }
 
                 /** Applied on release: each apply is a real system call. */
                 override fun onStopTrackingTouch(b: SeekBar) {
+                    // The bubble exists only while a finger is on the slider. Left up, it would
+                    // be a second number on screen disagreeing with the thumb the moment the
+                    // volume changed from anywhere else.
+                    bubble.visibility = View.INVISIBLE
                     b.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
                     val max = router.volumeMax(stream.id)
                     val outcome = router.setVolume(stream.id, Volume.indexFor(b.progress, max))
@@ -150,7 +162,7 @@ class MainActivity : AppCompatActivity() {
                 }
             })
             volumeRows.addView(view)
-            rows.add(Row(stream, label, bar, thumb))
+            rows.add(Row(stream, label, bar, thumb, bubble))
         }
     }
 
@@ -166,7 +178,31 @@ class MainActivity : AppCompatActivity() {
             row.bar.isEnabled = max > 0
             row.bar.progress = percent
             row.thumb.label = if (max <= 0) "--" else percent.toString()
+            row.bubble.text = "$percent%"
         }
+    }
+
+    /**
+     * Put the bubble over the thumb, and keep it on screen.
+     *
+     * The thumb travels between the bar's padding, not between its edges, which is why this
+     * cannot simply be a fraction of the width — at 0% and 100% the bubble would sit visibly
+     * off to one side of the thumb it belongs to.
+     *
+     * Clamped at both ends so the bubble never runs past the screen: at 100% a centred bubble
+     * would hang half off the right edge, and the number on it is the whole point.
+     */
+    private fun positionBubble(bar: SeekBar, bubble: TextView) {
+        if (bubble.width == 0) {
+            // First pass, before it has been measured. Try again once it has been.
+            bubble.post { positionBubble(bar, bubble) }
+            return
+        }
+        val travel = bar.width - bar.paddingLeft - bar.paddingRight
+        val fraction = if (bar.max == 0) 0f else bar.progress.toFloat() / bar.max
+        val thumbCentre = bar.paddingLeft + travel * fraction
+        val x = thumbCentre - bubble.width / 2f
+        bubble.translationX = x.coerceIn(0f, (bar.width - bubble.width).toFloat())
     }
 
     private fun color(id: Int) = ContextCompat.getColor(this, id)

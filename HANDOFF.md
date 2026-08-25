@@ -1233,3 +1233,29 @@ exactly the detail that explains why one stream can land on 25 and another canno
 
 G4 to a fixed point in one pass: 13 functions, 0 dead, 0 unreferenced drawables.
 TEST 1: 41 green.
+
+---
+
+## v35 — a key-preview bubble above the finger
+
+While a slider is being dragged the finger sits on the thumb, covering the one number that is
+changing. So the number rises above it, the way a keyboard shows the key being pressed, and
+drops away on release.
+
+Three details that are not obvious:
+
+**The bubble is INVISIBLE at rest, not GONE.** Gone would collapse the row, and every slider on
+the screen would jump the moment a finger touched one.
+
+**The thumb does not travel between the bar's edges**, it travels between its padding — so the
+bubble's position cannot be a fraction of the width. At 0% and 100% it would sit visibly beside
+the thumb it belongs to rather than over it.
+
+**It is clamped to the bar.** At 100% a centred bubble hangs half off the right edge of the
+screen, taking the number with it, which is the whole point of the bubble.
+
+The thumb keeps its own number for the resting state; the bubble only exists while a finger is
+down, so the two can never disagree.
+
+G4 to a fixed point in one pass: 13 functions, 0 dead, 0 unreferenced drawables.
+TEST 1: 41 green.
