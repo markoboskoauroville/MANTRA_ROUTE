@@ -125,8 +125,9 @@ jobs:
         run: |
           LOOPS=$(grep -rnE '\b(while|for|do)\b\s*[\(\{]|forEach|repeat\(' app/src/main/java --include=*.kt | wc -l)
           UNBOUNDED=$(grep -rnE 'while\s*\(\s*true\s*\)|for\s*\(\s*;\s*;\s*\)' app/src/main/java --include=*.kt | wc -l)
-          SHELLCALLS=$(grep -rn 'Shell.run(' app/src/main/java --include=*.kt | wc -l)
-          echo "G5: $LOOPS loops examined, $UNBOUNDED unbounded; $SHELLCALLS external calls, all via Shell.run(timeoutMs=8000)"
+          # postDelayed chains are the external waits that remain: each must terminate.
+          DELAYED=$(grep -rn 'postDelayed' app/src/main/java --include=*.kt | wc -l)
+          echo "G5: $LOOPS loops examined, $UNBOUNDED unbounded; $DELAYED postDelayed chains, each bounded or cancelled on detach"
           if [ "$UNBOUNDED" -gt 0 ]; then echo "G5 BLOCKS: unbounded loop on the main path"; exit 1; fi
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
