@@ -42,10 +42,10 @@ object StatusBanner {
     ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
 
     /**
-     * Show [line] across the top. Safe to call repeatedly: a second press replaces the first
-     * rather than stacking, and restarts the clock.
+     * Show [line] across the screen. Safe to call repeatedly: a second press replaces the
+     * first rather than stacking, and restarts the clock.
      */
-    fun show(context: Context, line: String) {
+    fun show(context: Context, line: String, atTop: Boolean = true) {
         if (!canShow(context)) return
         main.post {
             runCatching {
@@ -77,7 +77,14 @@ object StatusBanner {
                         WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                     PixelFormat.TRANSLUCENT,
-                ).apply { gravity = Gravity.TOP }
+                ).apply {
+                    // Top when it comes from a tile, because the screen behind is whatever the
+                    // person was doing and the top is out of the way of it.
+                    //
+                    // CENTRE when it comes from a button in this app, because the top is where
+                    // the buttons are and a line across them covers the thing just pressed.
+                    gravity = if (atTop) Gravity.TOP else Gravity.CENTER
+                }
 
                 if (text.parent == null) windows.addView(text, params)
                 else windows.updateViewLayout(text, params)

@@ -66,9 +66,14 @@ abstract class VolumeTileService : TileService() {
         paint()
     }
 
-    /** Unregistered as soon as the panel closes: an observer on a tile nobody is looking at. */
+    /**
+     * The panel has closed, so the screen is visible again and the banner has somewhere to go.
+     *
+     * Also where the observer is released: an observer on a tile nobody is looking at.
+     */
     override fun onStopListening() {
         runCatching { contentResolver.unregisterContentObserver(watcher) }
+        Pending.take()?.let { StatusBanner.show(applicationContext, it) }
         super.onStopListening()
     }
 
@@ -94,10 +99,20 @@ abstract class VolumeTileService : TileService() {
                 // cannot land exactly on a preset the two differ, and the bubble must report
                 // the level that is actually in force.
                 val landed = Presets.snap(Volume.percentFor(router.volumeIndex(stream.id), max), max)
-                // The banner if it is allowed, the toast if it is not. Never neither: a press
-                // with no acknowledgement is the complaint this whole feature answers.
+                // The banner CANNOT be shown here.
+                //
+                // An app overlay is TYPE_APPLICATION_OVERLAY, which the platform layers BELOW
+                // the status bar and the notification shade — that layering is the whole point
+                // of the type, and there is no window type available to a normal app that sits
+                // above the shade. Calling show() from here draws the line perfectly, behind
+                // the panel being looked at, which is exactly why it appeared to do nothing.
+                //
+                // So it is held and shown when the shade closes, which is the first moment it
+                // can be seen. If the overlay is not permitted, a toast instead: a toast is a
+                // system window and does clear the shade, it is simply small and at the bottom.
                 if (StatusBanner.canShow(this)) {
-                    StatusBanner.show(this, TileText.banner(stream.label, landed, max))
+                    Pending.line = TileText.banner(stream.label, landed, max)
+                    Pending.at = System.currentTimeMillis()
                 } else {
                     say(TileText.spoken(stream.label, landed, max))
                 }
@@ -154,6 +169,26 @@ abstract class VolumeTileService : TileService() {
 }
 
 private const val PREFS = "mantra_route_tiles"
+
+/**
+ * The last change, waiting for the shade to close.
+ *
+ * Shared across all five tiles on purpose: pressing three tiles and closing the shade should
+ * show ONE line about the last thing touched, not three stacked on top of each other.
+ */
+private object Pending {
+    var line: String? = null
+    var at: Long = 0L
+
+    /** Stale after this: a banner about something done minutes ago is noise. */
+    private const val FRESH_MS = 15_000L
+
+    fun take(): String? {
+        val value = line
+        line = null
+        return if (value != null && System.currentTimeMillis() - at <= FRESH_MS) value else null
+    }
+}
 
 /** Five tiles, one per stream. Android requires a distinct class for each. */
 class CallVolumeTileService : VolumeTileService() {
