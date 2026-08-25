@@ -53,6 +53,30 @@ object Volume {
 
     /** A stream low enough to sound broken. Named as a LEVEL so it does not read as a fault. */
     fun isLow(index: Int, max: Int): Boolean = max > 0 && percentFor(index, max) <= 25
+
+    /**
+     * The number to SHOW, which is not always the number measured.
+     *
+     * Reported 25.8.2026: a tile asked for 25% displayed 27%. Not a rounding bug — the Call
+     * stream has FIFTEEN steps where every other stream has sixteen. 25% of 15 is 3.75, which
+     * lands on step 4, and step 4 of 15 is 26.7%. The tile was reporting the truth and the
+     * truth was useless: a control offering 25 and 50 must say 25 and 50, or the two ends
+     * cannot be told apart at a glance.
+     *
+     * So when the measured level is within half a step of an end of the pair — the closest the
+     * hardware can get — the tile shows the end it was aiming at. Further away than that and it
+     * shows what is really there, because then the level came from somewhere else and saying
+     * "50" would be a lie rather than a rounding.
+     */
+    fun displayPercent(index: Int, max: Int, pair: TogglePair): Int {
+        if (max <= 0) return 0
+        val actual = percentFor(index, max)
+        val halfStep = Math.round(50.0 / max).toInt().coerceAtLeast(1)
+        listOf(pair.high, pair.low).forEach { end ->
+            if (Math.abs(actual - end) <= halfStep) return end
+        }
+        return actual
+    }
 }
 
 /**
@@ -80,8 +104,8 @@ object VolumeToggle {
         else Volume.indexFor(pair.high, max)
 
     /** The number drawn in the middle of the tile. No percent sign; the size is worth more. */
-    fun face(index: Int, max: Int): String =
-        if (max <= 0) "--" else Volume.percentFor(index, max).toString()
+    fun face(index: Int, max: Int, pair: TogglePair): String =
+        if (max <= 0) "--" else Volume.displayPercent(index, max, pair).toString()
 }
 
 object TileText {
@@ -103,11 +127,20 @@ object TileText {
     fun four(name: String): String =
         FOUR[name] ?: name.filter { it.isLetter() }.take(4).uppercase().ifEmpty { "----" }
 
-    fun badge(index: Int, max: Int): String = VolumeToggle.face(index, max)
+    fun badge(index: Int, max: Int, pair: TogglePair): String = VolumeToggle.face(index, max, pair)
+
+    /**
+     * The range, so the two tiles for one channel can be told apart without pressing either.
+     *
+     * "I know which button does what. Now there is no range, I'm confused." Both tiles for a
+     * channel can read 50, and with only the current value on the face there is nothing to say
+     * whether the next press goes to 25 or to 100.
+     */
+    fun range(pair: TogglePair): String = "${pair.low}/${pair.high}"
 
     fun label(name: String, index: Int, max: Int, pair: TogglePair): String =
         if (max <= 0) "$name unavailable"
-        else "$name ${Volume.percentFor(index, max)}%  (${pair.high}/${pair.low})"
+        else "$name ${Volume.displayPercent(index, max, pair)}%  (${range(pair)})"
 
     /** A control says what the NEXT press does. */
     fun nextAction(index: Int, max: Int, pair: TogglePair): String = when {

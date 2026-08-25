@@ -21,7 +21,6 @@ import android.service.quicksettings.TileService
 abstract class VolumeTileService : TileService() {
 
     abstract val stream: Stream
-    abstract val glyphRes: Int
 
     /** Which two levels this tile moves between. The class carries it; the logic does not care. */
     abstract val pair: TogglePair
@@ -67,7 +66,11 @@ abstract class VolumeTileService : TileService() {
         tile.label = TileText.label(stream.label, index, max, pair)
         tile.subtitle = TileText.nextAction(index, max, pair)
         tile.icon = Icon.createWithBitmap(
-            TileIcon.render(this, glyphRes, TileText.badge(index, max), TileText.four(stream.label))
+            TileIcon.render(
+                TileText.range(pair),
+                TileText.badge(index, max, pair),
+                TileText.four(stream.label),
+            )
         )
         tile.updateTile()
     }
@@ -86,60 +89,50 @@ abstract class VolumeTileService : TileService() {
 
 class CallVolumeTileService : VolumeTileService() {
     override val stream = Volume.byId(0)
-    override val glyphRes = R.drawable.ic_stream_call
     override val pair = VolumeToggle.LOUD
 }
 
 class CallQuietVolumeTileService : VolumeTileService() {
     override val stream = Volume.byId(0)
-    override val glyphRes = R.drawable.ic_stream_call
     override val pair = VolumeToggle.QUIET
 }
 
 class MediaVolumeTileService : VolumeTileService() {
     override val stream = Volume.byId(3)
-    override val glyphRes = R.drawable.ic_stream_media
     override val pair = VolumeToggle.LOUD
 }
 
 class MediaQuietVolumeTileService : VolumeTileService() {
     override val stream = Volume.byId(3)
-    override val glyphRes = R.drawable.ic_stream_media
     override val pair = VolumeToggle.QUIET
 }
 
 class RingVolumeTileService : VolumeTileService() {
     override val stream = Volume.byId(2)
-    override val glyphRes = R.drawable.ic_stream_ring
     override val pair = VolumeToggle.LOUD
 }
 
 class RingQuietVolumeTileService : VolumeTileService() {
     override val stream = Volume.byId(2)
-    override val glyphRes = R.drawable.ic_stream_ring
     override val pair = VolumeToggle.QUIET
 }
 
 class NotificationVolumeTileService : VolumeTileService() {
     override val stream = Volume.byId(5)
-    override val glyphRes = R.drawable.ic_stream_notification
     override val pair = VolumeToggle.LOUD
 }
 
 class NotificationQuietVolumeTileService : VolumeTileService() {
     override val stream = Volume.byId(5)
-    override val glyphRes = R.drawable.ic_stream_notification
     override val pair = VolumeToggle.QUIET
 }
 
 class AlarmVolumeTileService : VolumeTileService() {
     override val stream = Volume.byId(4)
-    override val glyphRes = R.drawable.ic_stream_alarm
     override val pair = VolumeToggle.LOUD
 }
 
 class AlarmQuietVolumeTileService : VolumeTileService() {
     override val stream = Volume.byId(4)
-    override val glyphRes = R.drawable.ic_stream_alarm
     override val pair = VolumeToggle.QUIET
 }

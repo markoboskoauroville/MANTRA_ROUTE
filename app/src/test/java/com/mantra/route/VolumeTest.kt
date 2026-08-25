@@ -123,9 +123,9 @@ class ToggleTest {
 
     @Test
     fun `the face is a bare number so the digits can be drawn larger`() {
-        assertEquals("100", VolumeToggle.face(16, 16))
-        assertEquals("25", VolumeToggle.face(4, 16))
-        assertEquals("--", VolumeToggle.face(0, 0))
+        assertEquals("100", VolumeToggle.face(16, 16, VolumeToggle.LOUD))
+        assertEquals("25", VolumeToggle.face(4, 16, VolumeToggle.QUIET))
+        assertEquals("--", VolumeToggle.face(0, 0, VolumeToggle.LOUD))
     }
 }
 
@@ -153,8 +153,8 @@ class TileTextTest {
 
     @Test
     fun `the label names the level and which pair it toggles`() {
-        assertEquals("Media 100%  (100/50)", TileText.label("Media", 16, 16, VolumeToggle.LOUD))
-        assertEquals("Alarm 50%  (50/25)", TileText.label("Alarm", 8, 16, VolumeToggle.QUIET))
+        assertEquals("Media 100%  (50/100)", TileText.label("Media", 16, 16, VolumeToggle.LOUD))
+        assertEquals("Alarm 50%  (25/50)", TileText.label("Alarm", 8, 16, VolumeToggle.QUIET))
         assertEquals("Call unavailable", TileText.label("Call", 3, 0, VolumeToggle.LOUD))
     }
 
@@ -210,5 +210,71 @@ class FeedbackTest {
     @Test
     fun `the hold is long enough to read and short enough not to feel stuck`() {
         assertTrue(Feedback.HOLD_MS in 1200..4000)
+    }
+}
+
+/**
+ * The 27 bug, and the range.
+ */
+class DisplayTest {
+
+    @Test
+    fun `the call stream has fifteen steps and cannot land on 25 exactly`() {
+        // The arithmetic behind the report: 25% of 15 is 3.75, step 4 of 15 is 26.7%, shown 27.
+        assertEquals(4, Volume.indexFor(25, 15))
+        assertEquals(27, Volume.percentFor(4, 15))
+    }
+
+    @Test
+    fun `a tile asked for 25 shows 25, on a fifteen step stream`() {
+        assertEquals(25, Volume.displayPercent(4, 15, VolumeToggle.QUIET))
+        assertEquals(50, Volume.displayPercent(8, 15, VolumeToggle.QUIET))
+        assertEquals(50, Volume.displayPercent(8, 15, VolumeToggle.LOUD))
+        assertEquals(100, Volume.displayPercent(15, 15, VolumeToggle.LOUD))
+    }
+
+    @Test
+    fun `a sixteen step stream was never wrong and is not changed`() {
+        assertEquals(25, Volume.displayPercent(4, 16, VolumeToggle.QUIET))
+        assertEquals(50, Volume.displayPercent(8, 16, VolumeToggle.LOUD))
+        assertEquals(100, Volume.displayPercent(16, 16, VolumeToggle.LOUD))
+    }
+
+    @Test
+    fun `a level set from somewhere else is reported honestly, not snapped`() {
+        // The line between rounding and lying. 60% is not the tile's doing and must not be
+        // dressed up as 50, or the face would claim a state the tile did not put there.
+        assertEquals(63, Volume.displayPercent(10, 16, VolumeToggle.LOUD))
+        assertEquals(75, Volume.displayPercent(12, 16, VolumeToggle.LOUD))
+        assertEquals(0, Volume.displayPercent(0, 16, VolumeToggle.QUIET))
+    }
+
+    @Test
+    fun `snapping never reaches further than half a step`() {
+        // On a 16 step stream half a step is about 3 points, so 31% must stay 31 and not
+        // become 25 or 50.
+        assertEquals(31, Volume.displayPercent(5, 16, VolumeToggle.QUIET))
+    }
+
+    @Test
+    fun `a stream with no range shows nothing rather than zero percent`() {
+        assertEquals(0, Volume.displayPercent(0, 0, VolumeToggle.LOUD))
+        assertEquals("--", VolumeToggle.face(0, 0, VolumeToggle.LOUD))
+    }
+
+    @Test
+    fun `the range names both ends, low first, so the two tiles differ on sight`() {
+        assertEquals("50/100", TileText.range(VolumeToggle.LOUD))
+        assertEquals("25/50", TileText.range(VolumeToggle.QUIET))
+    }
+
+    @Test
+    fun `the two tiles for one channel can be told apart when both read 50`() {
+        // Exactly the confusion reported: both faces show 50 and only the range distinguishes
+        // whether the next press goes up or down.
+        val loud = TileText.badge(8, 16, VolumeToggle.LOUD)
+        val quiet = TileText.badge(8, 16, VolumeToggle.QUIET)
+        assertEquals(loud, quiet)
+        assertTrue(TileText.range(VolumeToggle.LOUD) != TileText.range(VolumeToggle.QUIET))
     }
 }

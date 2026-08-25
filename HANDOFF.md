@@ -808,3 +808,51 @@ descender room that digits never use, so centring on it sits visibly high.
 vertical middle where a circle is widest, so it is safe either way, but the four-letter name at
 the bottom is held to 72% width in case it is clipped. Erring narrow costs a few points of size;
 erring wide loses letters, and a lost letter cannot be recovered by looking.
+
+---
+
+## v19 — the 27, the range, and the whole circle
+
+### Where 27 came from
+
+A tile asked for 25% displayed 27%. Not a rounding bug: **the Call stream has FIFTEEN steps
+where every other stream has sixteen.** 25% of 15 is 3.75, which lands on step 4, and step 4 of
+15 is 26.7%. Media, Ring, Notification and Alarm all have 16 steps and land on 25 and 50
+exactly, which is why only CALL was wrong.
+
+The tile was reporting the truth and the truth was useless. `Volume.displayPercent` now shows
+the end of the pair the tile was aiming at **when the measured level is within half a step of
+it** — the closest the hardware can get. Further than half a step and it shows what is really
+there, because then the level came from somewhere else and saying "50" would be a lie rather
+than a rounding. A test pins both sides of that line: 27 becomes 25, but 31 stays 31.
+
+### The range, because both tiles read 50
+
+"I know which button does what. Now there is no range, I'm confused." Both tiles for a channel
+can sit at 50 at once, and with only the current value on the face there is nothing to say
+whether the next press goes to 25 or to 100. The range is now the top row, low first: `25/50`
+and `50/100`.
+
+### The face uses the circle, not the square
+
+Three rows: range, value, name, spread across the whole face with a real gap between the number
+and the letters.
+
+**A tile is a CIRCLE, so the usable width at any height is the chord at that height**, not the
+width of the bitmap. The middle row runs edge to edge because the circle is widest there; the
+top and bottom rows are measured against their own chords. Sizing every row against the square
+is exactly how corners get clipped, and it is why v18 held the name to a flat 72% — a guess
+where the geometry gives an answer.
+
+Rendered against a real circular mask before building, because a tile face can only be judged
+by looking at one.
+
+### The glyph is gone
+
+It took the top quarter to say what the four letters below it already said, leaving the number —
+the only part anyone reads — competing for the remainder. Two ways of naming the channel was
+affordable with two rows; with three it is a decoration paid for in legibility. The eleven
+output drawables are now unused by the tiles.
+
+TEST 1: 33 green. Sabotage: switching the snap tolerance to zero turns the 27 case red and
+nothing else.
