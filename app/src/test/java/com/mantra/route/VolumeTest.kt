@@ -175,3 +175,87 @@ class CycleTest {
         assertEquals(0, Presets.nextIndex(5, -1))
     }
 }
+
+/**
+ * The volume arithmetic. RESTORED: a regex removing the meter suites in v23 took this and
+ * FeedbackTest with them, and the count dropping from 41 to 18 is the only reason it was
+ * noticed. Counting the tests is not ceremony.
+ */
+class VolumeMathTest {
+
+    @Test
+    fun `the top of the range is reachable`() {
+        // Truncation puts 99% at 4 of 5 and the slider never reaches maximum.
+        assertEquals(5, Volume.indexFor(100, 5))
+        assertEquals(5, Volume.indexFor(99, 5))
+        assertEquals(15, Volume.indexFor(100, 15))
+    }
+
+    @Test
+    fun `both ends are exact`() {
+        assertEquals(0, Volume.indexFor(0, 15))
+        assertEquals(0, Volume.percentFor(0, 15))
+        assertEquals(100, Volume.percentFor(15, 15))
+    }
+
+    @Test
+    fun `a stream with no range does not divide by zero`() {
+        assertEquals(0, Volume.indexFor(50, 0))
+        assertEquals(0, Volume.percentFor(3, 0))
+        assertEquals("Call  unavailable", Volume.label("Call", 3, 0))
+        assertEquals(false, Volume.isLow(0, 0))
+    }
+
+    @Test
+    fun `out of range input is clamped, not wrapped`() {
+        assertEquals(15, Volume.indexFor(400, 15))
+        assertEquals(0, Volume.indexFor(-50, 15))
+    }
+
+    @Test
+    fun `the stuck-low case is flagged, because it reads as a routing failure`() {
+        assertTrue(Volume.isLow(1, 15))
+        assertEquals(false, Volume.isLow(8, 15))
+        assertTrue(Volume.isLow(25, 100))
+        assertEquals(false, Volume.isLow(26, 100))
+    }
+
+    @Test
+    fun `streams are found by platform id, not by list position`() {
+        assertEquals("Call", Volume.byId(0).label)
+        assertEquals("Media", Volume.byId(3).label)
+        assertEquals("Ring", Volume.byId(2).label)
+        assertEquals("Notification", Volume.byId(5).label)
+        assertEquals("Alarm", Volume.byId(4).label)
+    }
+
+    @Test
+    fun `an unknown stream id is a fault, not a wrong answer`() {
+        try {
+            Volume.byId(99)
+            throw AssertionError("expected a failure for an unknown stream id")
+        } catch (e: IllegalStateException) {
+            assertTrue(e.message!!.contains("99"))
+        }
+    }
+}
+
+/** A control that goes blank on press is the bug this exists to prevent. RESTORED with the above. */
+class FeedbackTest {
+
+    @Test
+    fun `an empty result still says something`() {
+        assertEquals("Done", Feedback.resultLabel(""))
+        assertEquals("Done", Feedback.resultLabel("   "))
+    }
+
+    @Test
+    fun `a real message is passed through trimmed`() {
+        assertEquals("Centred", Feedback.resultLabel("  Centred  "))
+    }
+
+    @Test
+    fun `the hold is long enough to read and short enough not to feel stuck`() {
+        assertTrue(Feedback.HOLD_MS in 1200..4000)
+    }
+}

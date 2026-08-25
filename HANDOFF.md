@@ -964,3 +964,46 @@ wrong tile without looking is exactly the case the bubble is for.
 
 TEST 1: 39 green. The suites for the two-tile model were deleted rather than adapted — they
 tested a thing that no longer exists.
+
+---
+
+## v23 — the VU meter made the app unlaunchable, and is removed
+
+### The crash
+
+`VuView` was declared `class VuView(context: Context)`. It was placed in `activity_main.xml`.
+**A custom view written into a layout is inflated by reflection through
+`(Context, AttributeSet)`** — a class with only `(Context)` compiles, passes lint, packages,
+installs, and then throws `InflateException` at `setContentView`. The app died before drawing
+anything, every launch, from v20.
+
+Removed with it: `OutputMeter`, the Visualizer capture, `LoudnessEnhancer`, Normalize, Boost,
+the RECORD_AUDIO permission and the meter maths.
+
+### The gate that would have caught it did not exist, and now does
+
+**G4b: every custom view named in a layout must take an AttributeSet.** Proven able to fail by
+planting a canary view with the wrong constructor and watching it go red.
+
+This is the third defect in two days that only a device could have found, and the honest reading
+is that G6's "NOT RUN — no device" was never a footnote. **An app that cannot start is not a
+subtle failure; it is the first thing any launch would have shown.** Everything else in the
+nine-gate run was green while the artefact was unusable.
+
+### Two defects introduced BY the removal
+
+Both found by counting, not by reading:
+
+- A regex meant to delete `MeterTest` and `NormalizeTest` also ate `VolumeMathTest` and
+  `FeedbackTest`. **The test count dropping from 41 to 18 is the only reason it was noticed** —
+  13 of those were meter tests, so 10 had vanished silently. Restored.
+- A second regex meant to delete `object Normalize` matched from the top of the file and left
+  `RouteModel.kt` **two lines long**. Caught by the analyser reporting "0 model functions
+  examined", which is a nonsense number rather than a red one. Restored from git and removed by
+  explicit line boundary instead.
+
+§15a of the gate module says two of three worst defects in its first run were introduced by
+fixing something else. That is now four for four across two runs. **A multi-line regex over
+source is a demolition tool, and it has now cost more than it has saved.**
+
+TEST 1: 28 green, which is 41 minus the 13 meter tests. Fuzzer 400,000 iterations, 0 faults.
