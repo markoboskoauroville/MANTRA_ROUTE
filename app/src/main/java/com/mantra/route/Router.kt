@@ -190,37 +190,19 @@ class Router(private val context: Context) {
             .firstOrNull { it.id == deviceId }
             ?: return Outcome.Refused("that output is no longer connected")
 
-        val row = allRows().firstOrNull { it.id == deviceId }
-
-        // Rung 1 — the real one, if this device ever grants it.
+        // Rung 1 — the only routing mechanism left, and it has never once been granted.
         if (caps.works(Probe.PERM_ROUTING)) {
             preferredDeviceForStrategy(device)?.let { return it }
         }
 
-        // Rung 2 — move each playing app's own session. This is the one that does what was
-        // actually asked: music follows, not just calls.
-        if (row != null && caps.works(Probe.APPOP_ROUTING)) {
-            val targets = MediaTargets.playing(context)
-            when {
-                targets.isEmpty() && !MediaTargets.listenerEnabled(context) -> Unit
-                targets.isEmpty() -> Unit
-                else -> {
-                    val failures = targets.mapNotNull { pkg ->
-                        null
-                    }
-                    when {
-                        failures.isEmpty() ->
-                            return Outcome.Moved("moved ${targets.size} playing app(s)")
-                        failures.size < targets.size ->
-                            return Outcome.Partial(
-                                "moved some playing apps",
-                                "refused by " + failures.joinToString("; "),
-                            )
-                        else -> Unit  // all refused: fall through, do not report success
-                    }
-                }
-            }
-        }
+        // The MediaRouter2 proxy rung was REMOVED in v16, with the notification listener it
+        // depended on. It never moved a single stream in fourteen versions, and by the end it
+        // was worse than dead: the transfer call had been stubbed out, so the success branch
+        // would have reported "moved N playing app(s)" having done nothing at all. A control
+        // that lies is worse than one that refuses.
+        //
+        // It also cost a NotificationListenerService — read access to every notification on the
+        // phone — held solely to name which app was playing. Gone with it.
 
         // The communication rung was REMOVED in v11.
         //

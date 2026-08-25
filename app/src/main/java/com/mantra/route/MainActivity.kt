@@ -26,7 +26,6 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var state: State
     private lateinit var router: Router
-    private lateinit var watcher: OutputWatcher
 
     private lateinit var shizukuLine: TextView
     private lateinit var probeButton: TextView
@@ -81,7 +80,6 @@ class MainActivity : AppCompatActivity() {
         // v7-v10 pinned the call route and left it pinned. Anyone upgrading arrives with the
         // earpiece still held and no reason to know it. Let go before the screen is drawn.
         router.releaseAnythingHeldAtStartup()
-        watcher = OutputWatcher(this)
 
         shizukuLine = findViewById(R.id.shizuku_line)
         probeButton = findViewById(R.id.probe_button)
@@ -217,13 +215,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        watcher.start()
+        // Outputs are re-read on every resume; the live callback went with the notification.
         redraw()
     }
 
     override fun onPause() {
         super.onPause()
-        watcher.stop()
+
     }
 
     // ---- probing --------------------------------------------------------------------------
