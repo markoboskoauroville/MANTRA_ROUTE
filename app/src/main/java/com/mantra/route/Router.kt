@@ -171,23 +171,6 @@ class Router(private val context: Context) {
         }
     }
 
-        runCatching { audio.setStreamVolume(streamId, wanted, 0) }
-        if (volumeIndex(streamId) == wanted) return Outcome.Moved("set to $wanted of $max")
-
-        if (!caps.works(Probe.SHELL)) {
-            return Outcome.Refused(
-                "the platform refused $wanted of $max and Shizuku is not available to force it",
-            )
-        }
-        Shell.run(Volume.shellCommand(streamId, wanted))
-        val after = volumeIndex(streamId)
-        return if (after == wanted) {
-            Outcome.Moved("set to $wanted of $max via shell")
-        } else {
-            Outcome.Refused("stayed at $after of $max — the call stream often locks outside a call")
-        }
-    }
-
     fun activeId(): Int? {
         val communication = runCatching { audio.communicationDevice?.id }.getOrNull()
         if (communication != null && outputs().any { it.id == communication }) return communication
