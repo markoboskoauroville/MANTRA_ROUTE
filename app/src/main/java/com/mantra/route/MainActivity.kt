@@ -132,6 +132,10 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         drawVolumes()
+        // If the screen was left mid-measurement the watcher may never have run again, and the
+        // button would stay disabled for the life of the process. Re-enabling on every resume
+        // costs nothing and closes that.
+        normalizeButton.isEnabled = true
         if (hasMicrophone()) startMeter() else {
             vuLine.text = "tap Normalize to let the meter read the output mix"
         }
@@ -226,7 +230,15 @@ class MainActivity : AppCompatActivity() {
      */
     private fun press(button: TextView, restingLabel: String, run: () -> String) {
         button.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-        button.text = Feedback.resultLabel(run())
+        // The work is wrapped, and this is the reason: every button's action reaches a system
+        // service that can refuse. The clipboard throws on some OEM builds, a Settings screen
+        // can be absent, an audio effect can be unavailable. Unwrapped, any of those took the
+        // whole app down AND left the button frozen on its old label — the crash and the lie in
+        // one step. Now the fault becomes the button's text, which is where a fault belongs.
+        val result = runCatching { run() }.getOrElse { t ->
+            (t.cause ?: t).javaClass.simpleName + ": " + (t.message ?: "refused")
+        }
+        button.text = Feedback.resultLabel(result)
         button.setTextColor(color(R.color.amber))
         button.postDelayed({
             button.text = restingLabel

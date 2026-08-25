@@ -22,10 +22,21 @@ object TileIcon {
 
     private const val SIZE = 192f
 
+    /**
+     * Rendered faces, kept.
+     *
+     * There are exactly twenty possible faces — five channels by four levels — and a fresh
+     * 192x192 ARGB bitmap is 147 KB. Without this, one is allocated on every press and on every
+     * time the shade is opened, for a picture that was identical the last twenty times. The map
+     * cannot grow beyond the number of distinct faces, so it needs no eviction.
+     */
+    private val cache = HashMap<String, Bitmap>()
+
     /** A hair inside the radius so antialiasing at the extreme edge is not clipped. */
     private const val INSET = 0.97f
 
     fun render(face: String): Bitmap {
+        cache[face]?.let { if (!it.isRecycled) return it }
         val size = SIZE.toInt()
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
@@ -43,6 +54,7 @@ object TileIcon {
         val bounds = Rect()
         paint.getTextBounds(face, 0, face.length, bounds)
         canvas.drawText(face, SIZE / 2f, SIZE / 2f + bounds.height() / 2f, paint)
+        cache[face] = bitmap
         return bitmap
     }
 

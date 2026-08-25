@@ -34,13 +34,21 @@ abstract class VolumeTileService : TileService() {
 
         // Read the level off the phone at the moment of the press. A tile is listened to and
         // then left alone for hours; anything cached here would be a guess about the past.
-        val now = Presets.snap(router.volumeIndex(stream.id).let { Volume.percentFor(it, max) }, max)
-        val wanted = Presets.next(now)
+        //
+        // The next STEP, not the next percentage: a coarse stream cannot represent all four
+        // presets, and cycling on percentages leaves such a stream stuck on one level with
+        // every press appearing to work.
+        val currentIndex = router.volumeIndex(stream.id)
+        val wantedIndex = Presets.nextIndex(currentIndex, max)
 
-        when (val outcome = router.setVolume(stream.id, Volume.indexFor(wanted, max))) {
+        when (val outcome = router.setVolume(stream.id, wantedIndex)) {
             is Router.Outcome.Moved -> {
                 paint()
-                say(TileText.spoken(stream.label, wanted, max))
+                // Say what the phone ended up at, not what was asked for. On a stream that
+                // cannot land exactly on a preset the two differ, and the bubble must report
+                // the level that is actually in force.
+                val landed = Presets.snap(Volume.percentFor(router.volumeIndex(stream.id), max), max)
+                say(TileText.spoken(stream.label, landed, max))
             }
             is Router.Outcome.Refused -> {
                 say(outcome.why)

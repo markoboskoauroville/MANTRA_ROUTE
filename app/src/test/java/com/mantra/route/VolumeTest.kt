@@ -72,33 +72,6 @@ class VolumeMathTest {
 
 
 
-class NeedsTest {
-
-    @Test
-    fun `call media and alarm need nothing at all, ever`() {
-        listOf(0, 3, 4).forEach { stream ->
-            assertEquals(Need.NOTHING, Needs.forVolume(stream, dndActive = false, policyGranted = false))
-            assertEquals(Need.NOTHING, Needs.forVolume(stream, dndActive = true, policyGranted = false))
-        }
-    }
-
-    @Test
-    fun `ring and notification need nothing until Do Not Disturb is on`() {
-        listOf(2, 5).forEach { stream ->
-            assertEquals(Need.NOTHING, Needs.forVolume(stream, dndActive = false, policyGranted = false))
-            assertEquals(Need.SETTINGS_TOGGLE, Needs.forVolume(stream, dndActive = true, policyGranted = false))
-            assertEquals(Need.NOTHING, Needs.forVolume(stream, dndActive = true, policyGranted = true))
-        }
-    }
-
-    @Test
-    fun `there is no longer any state that could require a privileged shell`() {
-        // v18: the enum has two entries and neither is SHIZUKU. This is the guard against it
-        // creeping back in as a third.
-        assertEquals(2, Need.values().size)
-        assertEquals("works out of the box", Needs.describe(Need.NOTHING))
-    }
-}
 
 class FeedbackTest {
 
@@ -328,5 +301,64 @@ class FaceTest {
     fun `an unknown channel still yields two characters rather than crashing`() {
         assertEquals("BL", TileText.two("Bluetooth"))
         assertEquals("--", TileText.two("123"))
+    }
+}
+
+/**
+ * The stuck-cycle defect, found by driving the cycle through the real index round-trip.
+ */
+class CycleTest {
+
+    private fun visits(max: Int, presses: Int = 12): Set<Int> {
+        var index = Volume.indexFor(100, max)
+        val seen = mutableSetOf<Int>()
+        repeat(presses) {
+            index = Presets.nextIndex(index, max)
+            seen.add(Presets.snap(Volume.percentFor(index, max), max))
+        }
+        return seen
+    }
+
+    @Test
+    fun `no stream can get stuck on one level, however coarse its range`() {
+        // A two-step stream used to visit exactly one level for ever, with every press looking
+        // like it worked. That is the failure this whole test exists for.
+        listOf(1, 2, 3, 5, 7, 10, 15, 16, 20, 30, 100).forEach { max ->
+            assertTrue("max=$max visited ${visits(max)}", visits(max).size >= 2)
+        }
+    }
+
+    @Test
+    fun `an ordinary stream still visits all four presets`() {
+        listOf(15, 16, 20, 30, 100).forEach { max ->
+            assertEquals("max=$max", setOf(25, 50, 75, 100), visits(max))
+        }
+    }
+
+    @Test
+    fun `the cycle closes, so the same presses repeat the same levels`() {
+        listOf(15, 16).forEach { max ->
+            var index = Volume.indexFor(100, max)
+            val first = (1..4).map { Presets.nextIndex(index, max).also { i -> index = i } }
+            val second = (1..4).map { Presets.nextIndex(index, max).also { i -> index = i } }
+            assertEquals("max=$max", first, second)
+        }
+    }
+
+    @Test
+    fun `snapping never reaches more than half the gap between presets`() {
+        // Uncapped, the tolerance on a coarse stream grew past 25 points and every level
+        // snapped to the same preset — half of how the cycle got stuck. Capped at 12, which is
+        // half the 25 point gap, a value further than 12 from every preset is left alone.
+        assertEquals(12, Presets.snap(12, 1))    // 13 from 25, the nearest preset
+        assertEquals(50, Presets.snap(38, 2))    // exactly 12 from 50, so it snaps
+        // and on a normal stream the tolerance is the real half step, so 38 is left alone
+        assertEquals(38, Presets.snap(38, 16))
+    }
+
+    @Test
+    fun `a stream with no range yields step zero rather than dividing by anything`() {
+        assertEquals(0, Presets.nextIndex(0, 0))
+        assertEquals(0, Presets.nextIndex(5, -1))
     }
 }

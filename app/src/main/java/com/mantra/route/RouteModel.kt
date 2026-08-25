@@ -77,6 +77,34 @@ object Presets {
     fun next(percent: Int): Int = LEVELS.firstOrNull { it > percent } ?: LEVELS.first()
 
     /**
+     * The next STEP to set, chosen among the steps this stream can actually reach.
+     *
+     * Found 25.8.2026 by driving the cycle through the real index round-trip: a stream with a
+     * very coarse range GOT STUCK ON ONE LEVEL, and every press looked like it worked. On a
+     * two-step stream, 25% and 50% both land on the same step, that step reads back as one
+     * percentage, and `next()` on that percentage returns the level we are already at — for
+     * ever.
+     *
+     * Cycling on percentages assumed the stream could represent them. Cycling on the steps
+     * themselves cannot make that mistake: the stops are computed from the stream's own range
+     * and de-duplicated, so every press moves to a different step. **Every press changes
+     * something, which is the only promise a toggle has to keep.**
+     *
+     * A guard for "the presets collapse to a single step" was written here and then removed:
+     * checked exhaustively over ranges 1 to 4096, it never happens, because 25% of any range
+     * always rounds below 100% of it. Unreachable code that looks defensive is worse than none
+     * — it is a branch nobody can test and everybody trusts.
+     *
+     * His phone reports 15 and 16 and was never affected. This is a hole found by looking, not
+     * a bug reported.
+     */
+    fun nextIndex(currentIndex: Int, max: Int): Int {
+        if (max <= 0) return 0
+        val stops = LEVELS.map { Volume.indexFor(it, max) }.distinct().sorted()
+        return stops.firstOrNull { it > currentIndex } ?: stops.first()
+    }
+
+    /**
      * The level to SHOW, which is not always the level measured.
      *
      * The Call stream has fifteen steps where the others have sixteen, so 25% lands on step 4
@@ -85,7 +113,10 @@ object Presets {
      */
     fun snap(percent: Int, max: Int): Int {
         if (max <= 0) return 0
-        val halfStep = Math.round(50.0 / max).toInt().coerceAtLeast(1)
+        // Half a step, but NEVER more than half the gap between two presets. Without the cap
+        // the tolerance on a coarse stream grows past 25 points and every level snaps to the
+        // same preset, which is half of how the cycle got stuck.
+        val halfStep = Math.round(50.0 / max).toInt().coerceIn(1, 12)
         return LEVELS.firstOrNull { Math.abs(percent - it) <= halfStep } ?: percent
     }
 
@@ -145,30 +176,6 @@ object TileText {
     fun spoken(name: String, percent: Int, max: Int): String =
         if (max <= 0) "$name has no volume range on this phone"
         else "$name ${Presets.snap(percent, max)}%"
-}
-
-/**
- * What this app needs, now that Shizuku is gone.
- *
- * Kept as a model rather than deleted with the probe, because the answer is the whole point:
- * every combination returns NOTHING or a switch in Settings, and a test asserts that nothing
- * can ever return SHIZUKU again.
- */
-enum class Need { NOTHING, SETTINGS_TOGGLE }
-
-object Needs {
-
-    fun forVolume(streamId: Int, dndActive: Boolean, policyGranted: Boolean): Need = when {
-        streamId != 2 && streamId != 5 -> Need.NOTHING
-        !dndActive -> Need.NOTHING
-        policyGranted -> Need.NOTHING
-        else -> Need.SETTINGS_TOGGLE
-    }
-
-    fun describe(need: Need): String = when (need) {
-        Need.NOTHING -> "works out of the box"
-        Need.SETTINGS_TOGGLE -> "needs Do Not Disturb access, granted in Settings"
-    }
 }
 
 /** A control that goes blank on press is the bug this exists to prevent. */
