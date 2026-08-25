@@ -594,10 +594,10 @@ class VolumeToggleTest {
 
     @Test
     fun `full goes to half and half goes back to full`() {
-        assertEquals(8, VolumeToggle.target(15, 15))   // 100% -> 50%
-        assertEquals(15, VolumeToggle.target(8, 15))   // 53%  -> 100%
-        assertEquals(8, VolumeToggle.target(16, 16))
-        assertEquals(16, VolumeToggle.target(8, 16))
+        assertEquals(8, VolumeToggle.target(15, 15, VolumeToggle.LOUD))   // 100% -> 50%
+        assertEquals(15, VolumeToggle.target(8, 15, VolumeToggle.LOUD))   // 53%  -> 100%
+        assertEquals(8, VolumeToggle.target(16, 16, VolumeToggle.LOUD))
+        assertEquals(16, VolumeToggle.target(8, 16, VolumeToggle.LOUD))
     }
 
     @Test
@@ -605,8 +605,8 @@ class VolumeToggleTest {
         // The property that rules out the naive `if (index == max) half else max`.
         for (max in listOf(5, 7, 15, 16, 30)) {
             val half = Volume.indexFor(50, max)
-            val once = VolumeToggle.target(half, max)
-            val twice = VolumeToggle.target(once, max)
+            val once = VolumeToggle.target(half, max, VolumeToggle.LOUD)
+            val twice = VolumeToggle.target(once, max, VolumeToggle.LOUD)
             assertEquals("max=$max", half, twice)
         }
     }
@@ -617,39 +617,40 @@ class VolumeToggleTest {
         // of this suite missed: 13/15 is 87%, loud but not at the top. The naive
         // `if (index == max)` toggle raises it to 100% instead of halving it, and every other
         // test in this class passes with that bug in place.
-        assertTrue(VolumeToggle.atFull(13, 15))
-        assertEquals(8, VolumeToggle.target(13, 15))
-        assertEquals(8, VolumeToggle.target(14, 15))
+        assertTrue(VolumeToggle.atHigh(13, 15, VolumeToggle.LOUD))
+        assertEquals(8, VolumeToggle.target(13, 15, VolumeToggle.LOUD))
+        assertEquals(8, VolumeToggle.target(14, 15, VolumeToggle.LOUD))
         // and just below the line, it goes up
-        assertEquals(false, VolumeToggle.atFull(11, 15))
-        assertEquals(15, VolumeToggle.target(11, 15))
+        assertEquals(false, VolumeToggle.atHigh(11, 15, VolumeToggle.LOUD))
+        assertEquals(15, VolumeToggle.target(11, 15, VolumeToggle.LOUD))
     }
 
     @Test
     fun `a quiet stream goes loud first, from any starting level`() {
-        assertEquals(15, VolumeToggle.target(0, 15))
-        assertEquals(15, VolumeToggle.target(1, 15))
-        assertEquals(15, VolumeToggle.target(4, 15))
+        assertEquals(15, VolumeToggle.target(0, 15, VolumeToggle.LOUD))
+        assertEquals(15, VolumeToggle.target(1, 15, VolumeToggle.LOUD))
+        assertEquals(15, VolumeToggle.target(4, 15, VolumeToggle.LOUD))
     }
 
     @Test
     fun `the loud boundary is exact on both sides`() {
         // 75% counts as loud; anything under it does not.
-        assertTrue(VolumeToggle.atFull(75, 100))
-        assertEquals(false, VolumeToggle.atFull(74, 100))
+        assertTrue(VolumeToggle.atHigh(75, 100, VolumeToggle.LOUD))
+        assertEquals(false, VolumeToggle.atHigh(74, 100, VolumeToggle.LOUD))
     }
 
     @Test
     fun `a stream with no range is neither full nor toggled`() {
-        assertEquals(false, VolumeToggle.atFull(0, 0))
-        assertEquals(0, VolumeToggle.target(0, 0))
-        assertEquals("unavailable", VolumeToggle.subtitle(3, 0))
+        assertEquals(false, VolumeToggle.atHigh(0, 0, VolumeToggle.LOUD))
+        assertEquals(0, VolumeToggle.target(0, 0, VolumeToggle.LOUD))
+        assertEquals("Call unavailable", TileText.label("Call", 3, 0, VolumeToggle.LOUD))
     }
 
     @Test
-    fun `the subtitle answers without a press`() {
-        assertEquals("100%  (15/15)", VolumeToggle.subtitle(15, 15))
-        assertEquals("53%  (8/15)", VolumeToggle.subtitle(8, 15))
+    fun `the label answers without a press, and names the pair it toggles`() {
+        // Two tiles exist per stream now, so the label has to say WHICH one this is.
+        assertEquals("Call 100%  (100/50)", TileText.label("Call", 15, 15, VolumeToggle.LOUD))
+        assertEquals("Call 53%  (50/25)", TileText.label("Call", 8, 15, VolumeToggle.QUIET))
     }
 
     @Test
@@ -677,30 +678,32 @@ class VolumeToggleTest {
 class TileTextTest {
 
     @Test
-    fun `the badge is the percentage, short enough for a tile`() {
-        assertEquals("100%", TileText.badge(15, 15))
-        assertEquals("50%", TileText.badge(8, 16))
-        assertTrue(TileText.badge(8, 15).length <= 4)
+    fun `the badge is a bare number now, not a percentage`() {
+        // v17 dropped the percent sign so the digits can be drawn larger. The four-letter name
+        // and the glyph below it carry the meaning; the sign was spending width on nothing.
+        assertEquals("100", TileText.badge(15, 15))
+        assertEquals("50", TileText.badge(8, 16))
+        assertTrue(TileText.badge(8, 15).length <= 3)
     }
 
     @Test
     fun `a stream with no range says so rather than showing zero percent`() {
         // "0%" would be a lie: the stream has no range, it is not silent.
         assertEquals("--", TileText.badge(0, 0))
-        assertEquals("Call unavailable", TileText.label("Call", 0, 0))
+        assertEquals("Call unavailable", TileText.label("Call", 0, 0, VolumeToggle.LOUD))
     }
 
     @Test
-    fun `the label carries the name and the level together`() {
-        assertEquals("Media 100%", TileText.label("Media", 16, 16))
-        assertEquals("Alarm 50%", TileText.label("Alarm", 8, 16))
+    fun `the label carries the name, the level and which pair it toggles`() {
+        assertEquals("Media 100%  (100/50)", TileText.label("Media", 16, 16, VolumeToggle.LOUD))
+        assertEquals("Alarm 50%  (50/25)", TileText.label("Alarm", 8, 16, VolumeToggle.QUIET))
     }
 
     @Test
     fun `the subtitle says what the next press does, not what the state is`() {
-        assertEquals("tap for 50%", TileText.nextAction(15, 15))
-        assertEquals("tap for 100%", TileText.nextAction(4, 15))
-        assertEquals("no range on this device", TileText.nextAction(0, 0))
+        assertEquals("tap for 50%", TileText.nextAction(15, 15, VolumeToggle.LOUD))
+        assertEquals("tap for 100%", TileText.nextAction(4, 15, VolumeToggle.LOUD))
+        assertEquals("no range on this device", TileText.nextAction(0, 0, VolumeToggle.LOUD))
     }
 
     @Test
@@ -751,5 +754,79 @@ class NeedsTest {
         assertEquals(Need.SHIZUKU, Needs.forMonoAndBalance())
         assertEquals("needs Shizuku", Needs.describe(Need.SHIZUKU))
         assertEquals("works out of the box", Needs.describe(Need.NOTHING))
+    }
+}
+
+/**
+ * The quiet pair, and the four-letter names.
+ */
+class QuietPairTest {
+
+    @Test
+    fun `the quiet tile moves between 50 and 25, not to 100`() {
+        val q = VolumeToggle.QUIET
+        assertEquals(8, VolumeToggle.target(4, 16, q))    // 25% -> 50%
+        assertEquals(4, VolumeToggle.target(8, 16, q))    // 50% -> 25%
+    }
+
+    @Test
+    fun `two presses return you to where you started, for either pair`() {
+        // The property that rules out `if (index == high) low else high`, now for both pairs.
+        for (pair in listOf(VolumeToggle.LOUD, VolumeToggle.QUIET))
+            for (max in listOf(5, 7, 15, 16, 30)) {
+                val start = Volume.indexFor(pair.low, max)
+                val once = VolumeToggle.target(start, max, pair)
+                assertEquals("pair=$pair max=$max", start, VolumeToggle.target(once, max, pair))
+            }
+    }
+
+    @Test
+    fun `a loud stream pressed on the quiet tile goes quiet, not louder`() {
+        // At 100%, the quiet tile's job is to quieten. Going to 50 first would take two presses
+        // to reach the level the tile exists for.
+        assertEquals(4, VolumeToggle.target(16, 16, VolumeToggle.QUIET))
+    }
+
+    @Test
+    fun `the midpoint is the switching point, and it differs per pair`() {
+        assertEquals(75, VolumeToggle.LOUD.midpoint)
+        assertEquals(37, VolumeToggle.QUIET.midpoint)
+    }
+
+    @Test
+    fun `a pair with high below low is rejected at construction`() {
+        try {
+            TogglePair(high = 25, low = 50)
+            throw AssertionError("expected a failure for an inverted pair")
+        } catch (e: IllegalArgumentException) {
+            assertTrue(e.message!!.contains("25"))
+        }
+    }
+
+    @Test
+    fun `the face is the bare number, because the size is worth more than a percent sign`() {
+        assertEquals("100", VolumeToggle.face(16, 16))
+        assertEquals("25", VolumeToggle.face(4, 16))
+        assertEquals("--", VolumeToggle.face(0, 0))
+    }
+
+    @Test
+    fun `every channel has a readable four-letter name`() {
+        val names = Volume.STREAMS.map { TileText.four(it.label) }
+        assertEquals(listOf("CALL", "MEDI", "RING", "NOTF", "ALRM"), names)
+        names.forEach { assertEquals(4, it.length) }
+    }
+
+    @Test
+    fun `the names are chosen, not truncated`() {
+        // "ALARM".take(4) is "ALAR", which reads as nothing. A short list beats a clever rule.
+        assertEquals("ALRM", TileText.four("Alarm"))
+        assertEquals("NOTF", TileText.four("Notification"))
+    }
+
+    @Test
+    fun `an unknown channel still yields four characters rather than crashing`() {
+        assertEquals("BLUE", TileText.four("Bluetooth"))
+        assertEquals("----", TileText.four("123"))
     }
 }

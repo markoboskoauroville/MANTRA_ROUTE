@@ -707,3 +707,58 @@ once moved anything. That is a large permission held for a feature that never wo
 gone.
 
 TEST 1: 75 green.
+
+---
+
+## v17 — a second toggle pair, and a tile face with three zones
+
+### The pair is now a parameter
+
+v14 hard-coded 100/50. A quiet pair, 50/25, was asked for on 24.8.2026, so `TogglePair` carries
+it and the tile class chooses. `TogglePair(25, 50)` throws at construction — an inverted pair
+would make the midpoint logic quietly wrong rather than loudly broken.
+
+The switching point is the **midpoint** of the pair, not the top of it, for the same reason as
+v14: `if (index == high) low else high` discards a level sitting between the two. Midpoint means
+two presses return you to where you started, and the test now asserts that property for **both**
+pairs across five different `max` values.
+
+Note what the quiet tile does from 100%: it goes straight to 25, not to 50. The quiet tile's job
+is to make things quiet; stopping at 50 would take two presses to reach the level it exists for.
+
+### Ten tiles
+
+Five streams x two pairs. Android needs a distinct class per tile, so ten classes and ten
+manifest entries. The **picker label carries the pair** — "Call volume 100 / 50" and
+"Call volume 50 / 25" — because two tiles for the same stream are otherwise indistinguishable
+while you are choosing which to drag out.
+
+Ten is more than anyone will place. That clutter is the cost of not guessing which four were
+wanted, and it is paid once, in a screen visited rarely.
+
+### The tile face
+
+    GLYPH    small, top, 26% of the square
+    NUMBER   large, middle, bold, bare digits
+    NAME     four letters, bottom, letter-spaced
+
+The percent sign is gone: the digits can be drawn larger without it, and the name and glyph
+already carry the meaning.
+
+Four-letter names are **chosen, not truncated**: `"ALARM".take(4)` gives "ALAR", which reads as
+nothing. CALL, MEDI, RING, NOTF, ALRM.
+
+The channel is therefore said twice — as a shape and as letters. That is deliberate rather than
+redundant: shape is faster once learned, letters are unambiguous while learning, and whichever
+one a reader finds harder, the other is there.
+
+### Rendered before shipping
+
+The blank-tile bug of v15 taught that a tile face cannot be reasoned about, only looked at. The
+geometry was mirrored in PIL and rendered as a contact sheet before the build: five faces,
+glyph and number and name all inside their bands with margin. `100` and `25` both fit without
+shrinking.
+
+TEST 1: 84 green. Four v14/v15 tests broke on the signature and format changes and were
+**updated rather than deleted** — including one that existed twice under the same name, which
+is why a first fix appeared not to take.

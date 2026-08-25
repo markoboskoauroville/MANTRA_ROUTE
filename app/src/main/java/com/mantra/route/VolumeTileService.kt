@@ -23,6 +23,9 @@ abstract class VolumeTileService : TileService() {
     abstract val stream: Stream
     abstract val glyphRes: Int
 
+    /** Which two levels this tile moves between. The class carries it; the logic does not care. */
+    abstract val pair: TogglePair
+
     override fun onStartListening() {
         super.onStartListening()
         paint()
@@ -38,7 +41,7 @@ abstract class VolumeTileService : TileService() {
         // then left alone for hours; anything cached here would be a guess about the past.
         val now = router.volumeIndex(stream.id)
 
-        when (val outcome = router.setVolume(stream.id, VolumeToggle.target(now, max), caps)) {
+        when (val outcome = router.setVolume(stream.id, VolumeToggle.target(now, max, pair), caps)) {
             is Router.Outcome.Moved, is Router.Outcome.Partial -> paint()
             is Router.Outcome.Refused -> {
                 // A tile that refuses silently looks broken. Say it where it can be seen.
@@ -59,44 +62,85 @@ abstract class VolumeTileService : TileService() {
 
         tile.state = when {
             max <= 0 -> Tile.STATE_UNAVAILABLE
-            VolumeToggle.atFull(index, max) -> Tile.STATE_ACTIVE
+            VolumeToggle.atHigh(index, max, pair) -> Tile.STATE_ACTIVE
             else -> Tile.STATE_INACTIVE
         }
-        tile.label = TileText.label(stream.label, index, max)
-        tile.subtitle = TileText.nextAction(index, max)
+        tile.label = TileText.label(stream.label, index, max, pair)
+        tile.subtitle = TileText.nextAction(index, max, pair)
         tile.icon = Icon.createWithBitmap(
-            TileIcon.render(this, glyphRes, TileText.badge(index, max))
+            TileIcon.render(this, glyphRes, TileText.badge(index, max), TileText.four(stream.label))
         )
         tile.updateTile()
     }
 }
 
 /**
- * Five tiles, named and glyphed to match the system volume panel exactly — Media, not Music,
- * and the ringing-phone glyph for Ring rather than the bell, which belongs to Notification.
- * Borrowing the platform's own vocabulary means nothing has to be translated.
+ * Ten concrete tiles: five streams, two toggle pairs each.
+ *
+ * Android requires a distinct class per tile, so this is the only place the combinations can
+ * live. Ten is more than anyone will place — the picker shows them all and four or five get
+ * dragged out. That clutter is the cost of not guessing which four were wanted, and it is paid
+ * once, in a screen visited rarely.
+ *
+ * The LOUD family toggles 100/50, the QUIET family 50/25.
  */
+
 class CallVolumeTileService : VolumeTileService() {
-    override val stream = Volume.byId(0)   // STREAM_VOICE_CALL
+    override val stream = Volume.byId(0)
     override val glyphRes = R.drawable.ic_stream_call
+    override val pair = VolumeToggle.LOUD
+}
+
+class CallQuietVolumeTileService : VolumeTileService() {
+    override val stream = Volume.byId(0)
+    override val glyphRes = R.drawable.ic_stream_call
+    override val pair = VolumeToggle.QUIET
 }
 
 class MediaVolumeTileService : VolumeTileService() {
-    override val stream = Volume.byId(3)   // STREAM_MUSIC
+    override val stream = Volume.byId(3)
     override val glyphRes = R.drawable.ic_stream_media
+    override val pair = VolumeToggle.LOUD
+}
+
+class MediaQuietVolumeTileService : VolumeTileService() {
+    override val stream = Volume.byId(3)
+    override val glyphRes = R.drawable.ic_stream_media
+    override val pair = VolumeToggle.QUIET
 }
 
 class RingVolumeTileService : VolumeTileService() {
-    override val stream = Volume.byId(2)   // STREAM_RING
+    override val stream = Volume.byId(2)
     override val glyphRes = R.drawable.ic_stream_ring
+    override val pair = VolumeToggle.LOUD
+}
+
+class RingQuietVolumeTileService : VolumeTileService() {
+    override val stream = Volume.byId(2)
+    override val glyphRes = R.drawable.ic_stream_ring
+    override val pair = VolumeToggle.QUIET
 }
 
 class NotificationVolumeTileService : VolumeTileService() {
-    override val stream = Volume.byId(5)   // STREAM_NOTIFICATION
+    override val stream = Volume.byId(5)
     override val glyphRes = R.drawable.ic_stream_notification
+    override val pair = VolumeToggle.LOUD
+}
+
+class NotificationQuietVolumeTileService : VolumeTileService() {
+    override val stream = Volume.byId(5)
+    override val glyphRes = R.drawable.ic_stream_notification
+    override val pair = VolumeToggle.QUIET
 }
 
 class AlarmVolumeTileService : VolumeTileService() {
-    override val stream = Volume.byId(4)   // STREAM_ALARM
+    override val stream = Volume.byId(4)
     override val glyphRes = R.drawable.ic_stream_alarm
+    override val pair = VolumeToggle.LOUD
+}
+
+class AlarmQuietVolumeTileService : VolumeTileService() {
+    override val stream = Volume.byId(4)
+    override val glyphRes = R.drawable.ic_stream_alarm
+    override val pair = VolumeToggle.QUIET
 }

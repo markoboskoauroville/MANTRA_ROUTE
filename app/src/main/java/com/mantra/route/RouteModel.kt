@@ -570,25 +570,44 @@ object Feedback {
  * anything from three-quarters up reads as "loud" and goes to half; everything else goes to
  * full. Two presses always return you to where you started.
  */
+/**
+ * A two-level volume toggle, over a configurable pair.
+ *
+ * v14 hard-coded 100/50. A second pair, 50/25, was asked for on 24.8.2026 for quieter working,
+ * so the pair is now a parameter and the tile class carries it.
+ *
+ * The switching point is the MIDPOINT of the pair, not the top of it. The obvious
+ * `if (index == high) low else high` is wrong for the same reason it was wrong in v14: a stream
+ * sitting between the two levels would jump to the top instead of the nearer end, and where you
+ * were is discarded. Midpoint means two presses always return you to where you started, for
+ * any pair.
+ */
+data class TogglePair(val high: Int, val low: Int) {
+    init { require(high > low) { "high must exceed low: $high, $low" } }
+
+    /** Anything from here up reads as "at the high level" and the next press quietens it. */
+    val midpoint: Int get() = (high + low) / 2
+}
+
 object VolumeToggle {
 
-    const val HALF_PERCENT = 50
-    const val FULL_PERCENT = 100
+    /** The pair the original tiles use. */
+    val LOUD = TogglePair(high = 100, low = 50)
 
-    /** Above this, the stream counts as loud and the next press quietens it. */
-    const val LOUD_FROM_PERCENT = 75
+    /** The quiet pair, for working without filling the room. */
+    val QUIET = TogglePair(high = 50, low = 25)
 
-    fun atFull(index: Int, max: Int): Boolean =
-        max > 0 && Volume.percentFor(index, max) >= LOUD_FROM_PERCENT
+    fun atHigh(index: Int, max: Int, pair: TogglePair): Boolean =
+        max > 0 && Volume.percentFor(index, max) >= pair.midpoint
 
     /** The index the next press should set. */
-    fun target(index: Int, max: Int): Int =
-        if (atFull(index, max)) Volume.indexFor(HALF_PERCENT, max)
-        else Volume.indexFor(FULL_PERCENT, max)
+    fun target(index: Int, max: Int, pair: TogglePair): Int =
+        if (atHigh(index, max, pair)) Volume.indexFor(pair.low, max)
+        else Volume.indexFor(pair.high, max)
 
-    /** What the tile says under its name, so it answers without being pressed. */
-    fun subtitle(index: Int, max: Int): String =
-        if (max <= 0) "unavailable" else "${Volume.percentFor(index, max)}%  ($index/$max)"
+    /** The number drawn in the middle of the tile. No percent sign — the size is worth more. */
+    fun face(index: Int, max: Int): String =
+        if (max <= 0) "--" else Volume.percentFor(index, max).toString()
 }
 
 /**
@@ -606,19 +625,38 @@ object VolumeToggle {
  */
 object TileText {
 
-    /** Drawn inside the icon. Short enough to stay legible at tile size. */
-    fun badge(index: Int, max: Int): String =
-        if (max <= 0) "--" else "${Volume.percentFor(index, max)}%"
+    /**
+     * Four letters, because that is what fits under a number on a tile and what can be read at
+     * a glance without decoding.
+     *
+     * Chosen by hand rather than by truncation: "NOTIFICATION".take(4) gives "NOTI", but
+     * "ALARM".take(4) gives "ALAR", which reads as nothing. A short list of real names beats a
+     * clever rule, and the fallback only has to be sane for streams that will never appear here.
+     */
+    private val FOUR = mapOf(
+        "Call" to "CALL",
+        "Media" to "MEDI",
+        "Ring" to "RING",
+        "Notification" to "NOTF",
+        "Alarm" to "ALRM",
+    )
+
+    fun four(name: String): String =
+        FOUR[name] ?: name.filter { it.isLetter() }.take(4).uppercase().ifEmpty { "----" }
+
+    /** Drawn inside the icon, in the middle, large. */
+    fun badge(index: Int, max: Int): String = VolumeToggle.face(index, max)
 
     /** The label, where the panel shows one. Name and level in the same breath. */
-    fun label(name: String, index: Int, max: Int): String =
-        if (max <= 0) "$name unavailable" else "$name ${badge(index, max)}"
+    fun label(name: String, index: Int, max: Int, pair: TogglePair): String =
+        if (max <= 0) "$name unavailable"
+        else "$name ${Volume.percentFor(index, max)}%  (${pair.high}/${pair.low})"
 
     /** §5: a control says what the NEXT press does. */
-    fun nextAction(index: Int, max: Int): String = when {
+    fun nextAction(index: Int, max: Int, pair: TogglePair): String = when {
         max <= 0 -> "no range on this device"
-        VolumeToggle.atFull(index, max) -> "tap for 50%"
-        else -> "tap for 100%"
+        VolumeToggle.atHigh(index, max, pair) -> "tap for ${pair.low}%"
+        else -> "tap for ${pair.high}%"
     }
 }
 
