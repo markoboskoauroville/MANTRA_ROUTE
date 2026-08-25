@@ -6,84 +6,86 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Typeface
-import kotlin.math.hypot
 
 /**
- * The face of a Quick Settings tile: the channel letter above, the level below.
+ * The face of a Quick Settings tile: the channel letter and the level, on ONE line.
  *
- * TWO LINES, because one was wasting the height. On a single line the whole string "M100" is
- * four characters wide, and width was ALWAYS the binding constraint — measured, not assumed —
- * so the text could only reach 62px while more than half the circle's height sat empty. Split
- * across two lines the letter reaches 106px and the number 66px.
+ * v28 split this onto two lines because width was the binding constraint and the letter could
+ * then be drawn much larger. It measured better and looked worse — a big letter above a small
+ * number reads as two things stacked rather than one label, and the number, which is what is
+ * actually being read, ended up the smaller of the two. Reverted on that basis.
  *
- * Each line is grown against the CIRCLE at its own height. A line near the top or bottom has
- * less room than one through the middle, and the corner of its box is the point that runs out
- * first: half-width and half-height are the legs, the radius is the hypotenuse they must not
- * exceed. Sizing against the square instead is what clipped earlier attempts.
+ * ONE SIZE FOR EVERY FACE. Growing each face independently made `R44` a quarter larger than
+ * `M100`, because narrow glyphs leave a shorter string with further to grow. The size is
+ * computed once across every face the app can draw, and faces too wide at that size are
+ * CONDENSED rather than shrunk: condensing keeps the cap height and stroke weight identical,
+ * which is what the eye reads as "the same size". The squeeze is held to 10%, below which it
+ * does not register as distortion.
  */
 object TileIcon {
 
     private const val SIZE = 192f
-    private const val RADIUS = SIZE / 2f * 0.97f
+    private const val MAX_W = SIZE * 0.94f
+    private const val MAX_H = SIZE * 0.62f
 
-    private const val LETTER_Y = SIZE * 0.30f
-    private const val NUMBER_Y = SIZE * 0.69f
+    /** Below this the letterforms look wrong rather than merely narrow. */
+    private const val MIN_SCALE_X = 0.90f
 
     private val cache = HashMap<String, Bitmap>()
 
-    /** One size for every letter, so no channel is fatter than another. */
-    private val letterSize: Float by lazy {
-        growAt(Volume.STREAMS.map { TileText.one(it.label) }, LETTER_Y)
+    /**
+     * The widest face each channel can produce: its letter plus "100". Sizing against the four
+     * presets alone would leave every tile too large the moment the slider lands on a
+     * three-digit number.
+     */
+    private val allFaces: List<String> by lazy {
+        Volume.STREAMS.map { TileText.one(it.label) + "100" }
     }
 
-    /** One size for every level, sized against the widest the number can ever be. */
-    private val numberSize: Float by lazy { growAt(listOf("100"), NUMBER_Y) }
+    private val uniformSize: Float by lazy {
+        val paint = paint()
+        val bounds = Rect()
+        var size = 4f
+        while (size < 260f) {
+            paint.textSize = size + 1f
+            var widest = 0f
+            var tallest = 0
+            allFaces.forEach {
+                widest = maxOf(widest, paint.measureText(it))
+                paint.getTextBounds(it, 0, it.length, bounds)
+                tallest = maxOf(tallest, bounds.height())
+            }
+            if (tallest > MAX_H || MAX_W / widest < MIN_SCALE_X) break
+            size += 1f
+        }
+        size
+    }
 
-    fun render(letter: String, number: String): Bitmap {
-        val key = "$letter|$number"
-        cache[key]?.let { if (!it.isRecycled) return it }
+    fun render(face: String): Bitmap {
+        cache[face]?.let { if (!it.isRecycled) return it }
 
         val bitmap = Bitmap.createBitmap(SIZE.toInt(), SIZE.toInt(), Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        draw(canvas, letter, letterSize, LETTER_Y)
-        draw(canvas, number, numberSize, NUMBER_Y)
-        cache[key] = bitmap
-        return bitmap
-    }
+        if (face.isEmpty()) return bitmap
 
-    private fun draw(canvas: Canvas, text: String, size: Float, centreY: Float) {
-        if (text.isEmpty()) return
-        val paint = paint().apply { textSize = size }
+        val paint = paint().apply { textSize = uniformSize }
+        // Condense only as much as this particular face needs; narrow faces are untouched.
+        val natural = paint.measureText(face)
+        if (natural > MAX_W) paint.textScaleX = MAX_W / natural
+
+        // Centre on the INK, not the font's line box: the box carries ascender and descender
+        // room that capitals and digits never use, so centring on it sits visibly high.
         val bounds = Rect()
-        paint.getTextBounds(text, 0, text.length, bounds)
-        // Centre on the INK: the font's line box carries ascender and descender room that
-        // capitals and digits never use, so centring on it sits visibly high.
-        canvas.drawText(text, SIZE / 2f, centreY + bounds.height() / 2f, paint)
+        paint.getTextBounds(face, 0, face.length, bounds)
+        canvas.drawText(face, SIZE / 2f, SIZE / 2f + bounds.height() / 2f, paint)
+
+        cache[face] = bitmap
+        return bitmap
     }
 
     private fun paint() = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         textAlign = Paint.Align.CENTER
-    }
-
-    /** Largest size at which every one of [strings] keeps all four corners inside the circle. */
-    private fun growAt(strings: List<String>, centreY: Float): Float {
-        val paint = paint()
-        val bounds = Rect()
-        var size = 4f
-        outer@ while (size < 300f) {
-            paint.textSize = size + 1f
-            for (text in strings) {
-                paint.getTextBounds(text, 0, text.length, bounds)
-                val halfW = bounds.width() / 2f
-                val halfH = bounds.height() / 2f
-                val top = centreY - halfH - SIZE / 2f
-                val bottom = centreY + halfH - SIZE / 2f
-                if (hypot(halfW, top) > RADIUS || hypot(halfW, bottom) > RADIUS) break@outer
-            }
-            size += 1f
-        }
-        return size
     }
 }

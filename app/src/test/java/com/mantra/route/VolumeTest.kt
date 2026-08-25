@@ -324,14 +324,6 @@ class ElevatorTest {
 class PercentFaceTest {
 
     @Test
-    fun `the level line is the number alone, for the second row of the tile`() {
-        assertEquals("63", TileText.level(63, 16))
-        assertEquals("100", TileText.level(100, 16))
-        assertEquals("25", TileText.level(27, 15))
-        assertEquals("--", TileText.level(0, 0))
-    }
-
-    @Test
     fun `the face shows the level that is actually set, not the nearest preset`() {
         assertEquals("M63", TileText.face("Media", 63, 16))
         assertEquals("M31", TileText.face("Media", 31, 16))

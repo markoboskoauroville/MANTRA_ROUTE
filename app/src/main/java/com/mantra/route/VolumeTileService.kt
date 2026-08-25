@@ -161,9 +161,7 @@ abstract class VolumeTileService : TileService() {
         }
         tile.label = TileText.label(stream.label, percent, max)
         tile.subtitle = null
-        tile.icon = Icon.createWithBitmap(
-            TileIcon.render(TileText.one(stream.label), TileText.level(percent, max))
-        )
+        tile.icon = Icon.createWithBitmap(TileIcon.render(TileText.face(stream.label, percent, max)))
         tile.updateTile()
     }
 }
