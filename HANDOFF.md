@@ -1161,3 +1161,43 @@ asserts that no stream can sit on one level while every press appears to work �
 `Elevator.step` now instead of the retired function it was written against.
 
 TEST 1: 44 green. Elevator fuzz 800,000 presses, 0 faults. G4: 14 model functions, 0 dead.
+
+---
+
+## v33 — the overlay removed: it can never draw over the shade
+
+### Checked, not assumed
+
+`TYPE_APPLICATION_OVERLAY` draws over other **activity** windows and explicitly **not** over
+"critical system windows like the status bar or IME". When it replaced `TYPE_SYSTEM_OVERLAY` in
+Android O, apps lost the ability to draw over the status bar, navigation bar, lock screen **and
+the notification shade** — and Google confirmed that as intended behaviour rather than a bug.
+
+The shade is named in the documentation. There is no window type available to a normal app that
+sits above it. The banner was being drawn correctly on every tile press, behind the panel.
+
+### Deferring it was worse, not better
+
+v29 held the banner and showed it when the shade closed. That was reasoned about and it is
+wrong in use: **an acknowledgement that arrives after the thing it acknowledges has left the
+screen is not an acknowledgement.**
+
+### Back to the toast, and the overlay gone entirely
+
+A toast is a system-owned window and does clear the shade. Small, at the bottom, and visible,
+which beats large, at the top, and invisible.
+
+With the tile press on a toast, the overlay had no remaining job — the sliders had already
+stopped using it in v28, since the label under the thumb says the number and a line across the
+top covers what is being dragged. So `StatusBanner`, the Top banner button, `TileText.banner`
+and **the SYSTEM_ALERT_WINDOW permission** are all removed.
+
+**Two permissions left in the whole app**, and neither is frightening:
+`MODIFY_AUDIO_SETTINGS` and `ACCESS_NOTIFICATION_POLICY`.
+
+### G4 run to a fixed point, once
+
+The new rule applied: one pass, 13 functions, 0 dead. Compare v30 to v32, where removing dead
+code one function per version took three releases.
+
+TEST 1: 41 green.

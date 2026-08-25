@@ -195,13 +195,6 @@ object TileText {
         if (max <= 0) "$name has no volume range on this phone"
         else "$name ${Presets.snap(percent, max)}%"
 
-    /**
-     * The banner line, in capitals, kept short because it is drawn as large as the screen
-     * allows and every extra character costs height.
-     */
-    fun banner(name: String, percent: Int, max: Int): String =
-        if (max <= 0) name.uppercase() + "  NO RANGE"
-        else name.uppercase() + "  " + Presets.snap(percent, max) + "%"
 }
 
 /** A control that goes blank on press is the bug this exists to prevent. */

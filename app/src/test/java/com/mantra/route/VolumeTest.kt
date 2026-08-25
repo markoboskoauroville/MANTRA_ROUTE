@@ -387,23 +387,3 @@ class ElevatorDirectionTest {
     }
 }
 
-/** The line across the top of the screen. */
-class BannerTest {
-
-    @Test
-    fun `it names the channel and the level, in capitals`() {
-        assertEquals("MEDIA  25%", TileText.banner("Media", 25, 16))
-        assertEquals("CALL  100%", TileText.banner("Call", 100, 15))
-    }
-
-    @Test
-    fun `it reports the level that was reached, snapping only where the hardware cannot land`() {
-        assertEquals("CALL  25%", TileText.banner("Call", 27, 15))
-        assertEquals("MEDIA  63%", TileText.banner("Media", 63, 16))
-    }
-
-    @Test
-    fun `a stream with no range says so rather than claiming zero percent`() {
-        assertEquals("CALL  NO RANGE", TileText.banner("Call", 0, 0))
-    }
-}

@@ -20,17 +20,17 @@ import androidx.core.view.WindowInsetsCompat
  * Three buttons, a way back, and the version. No prose.
  *
  * The captions went because they were read once and then occupied the screen for ever. The
- * separate "Allowed / Not allowed" lines went too — but the state they carried did NOT: it is
- * folded into the button's own label, which is where §5 says it belongs anyway. A control
- * should say what it is and what pressing it will do, and "Top banner · allowed" does both in
- * the space the button already occupies.
+ * separate "Allowed / Not allowed" line went too — but the state it carried did NOT: it is
+ * folded into the button's own label, which is where §5 says it belongs anyway.
+ *
+ * The Top banner button went with the overlay in v33: an overlay cannot draw over the
+ * notification shade, so it could never do the one job it was added for.
  *
  * Laid out like the sliders: each control takes an equal share of the height, so the whole
  * screen is a target instead of a list with dead space beneath it.
  */
 class SettingsActivity : AppCompatActivity() {
 
-    private lateinit var bannerButton: TextView
     private lateinit var dndButton: TextView
     private lateinit var copyButton: TextView
 
@@ -50,7 +50,6 @@ class SettingsActivity : AppCompatActivity() {
             insets
         }
 
-        bannerButton = findViewById(R.id.banner_button)
         dndButton = findViewById(R.id.dnd_button)
         copyButton = findViewById(R.id.copy_button)
         findViewById<TextView>(R.id.version).text = "v" + BuildConfig.VERSION_NAME
@@ -62,19 +61,6 @@ class SettingsActivity : AppCompatActivity() {
             finish()
         }
 
-        bannerButton.setOnClickListener {
-            press(bannerButton, ::bannerLabel) {
-                if (StatusBanner.canShow(this)) {
-                    // CENTRE, not top: the top of this screen is where the buttons are, and a
-                    // line across them covers the one just pressed.
-                    StatusBanner.show(this, "MANTRA ROUTE  READY", atTop = false)
-                    "This is the banner"
-                } else {
-                    startActivity(StatusBanner.overlaySettings(this))
-                    "Switch Mantra Route on in the list"
-                }
-            }
-        }
 
         dndButton.setOnClickListener {
             press(dndButton, ::dndLabel) {
@@ -105,8 +91,6 @@ class SettingsActivity : AppCompatActivity() {
         super.onResume()
         // Read on every resume: both are granted by leaving this screen and coming back, so a
         // value read once at launch would be stale exactly when it mattered.
-        bannerButton.text = bannerLabel()
-        bannerButton.setTextColor(color(if (StatusBanner.canShow(this)) R.color.amber else R.color.sand))
         dndButton.text = dndLabel()
         dndButton.setTextColor(color(if (dndGranted()) R.color.amber else R.color.sand))
     }
@@ -114,8 +98,6 @@ class SettingsActivity : AppCompatActivity() {
     private fun dndGranted() =
         getSystemService(NotificationManager::class.java).isNotificationPolicyAccessGranted
 
-    private fun bannerLabel() =
-        "Top banner\n" + if (StatusBanner.canShow(this)) "allowed" else "not allowed"
 
     private fun dndLabel() =
         "Do Not Disturb access\n" + if (dndGranted()) "allowed" else "not allowed"
@@ -142,7 +124,6 @@ class SettingsActivity : AppCompatActivity() {
             append("Mantra Route v").append(BuildConfig.VERSION_NAME).append('\n')
             append("Android ").append(Build.VERSION.SDK_INT)
                 .append(" · ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append('\n')
-            append("Top banner: ").append(if (StatusBanner.canShow(this@SettingsActivity)) "allowed" else "not allowed").append('\n')
             append("Do Not Disturb access: ").append(if (dndGranted()) "granted" else "not granted").append("\n\n")
             append("VOLUME\n")
             Volume.STREAMS.forEach { stream ->
