@@ -103,11 +103,18 @@ class FaceTest {
  */
 class CycleTest {
 
+    /**
+     * Walks the LIVE path — Elevator.step — not the retired Presets.nextIndex it was written
+     * against. The property it guards has not changed: no stream may sit on one level while
+     * every press appears to work.
+     */
     private fun visits(max: Int, presses: Int = 12): Set<Int> {
         var index = Volume.indexFor(100, max)
+        var up = true
         val seen = mutableSetOf<Int>()
         repeat(presses) {
-            index = Presets.nextIndex(index, max)
+            val step = Elevator.step(index, max, up)
+            index = step.index; up = step.goingUp
             seen.add(Presets.snap(Volume.percentFor(index, max), max))
         }
         return seen
@@ -130,12 +137,9 @@ class CycleTest {
     }
 
     @Test
-    fun `the cycle closes, so the same presses repeat the same levels`() {
+    fun `the walk repeats, so the same presses give the same levels`() {
         listOf(15, 16).forEach { max ->
-            var index = Volume.indexFor(100, max)
-            val first = (1..4).map { Presets.nextIndex(index, max).also { i -> index = i } }
-            val second = (1..4).map { Presets.nextIndex(index, max).also { i -> index = i } }
-            assertEquals("max=$max", first, second)
+            assertEquals("max=$max", visits(max, 12), visits(max, 24))
         }
     }
 
@@ -152,8 +156,8 @@ class CycleTest {
 
     @Test
     fun `a stream with no range yields step zero rather than dividing by anything`() {
-        assertEquals(0, Presets.nextIndex(0, 0))
-        assertEquals(0, Presets.nextIndex(5, -1))
+        assertEquals(0, Elevator.step(0, 0, true).index)
+        assertEquals(0, Elevator.step(5, -1, false).index)
     }
 }
 

@@ -76,33 +76,6 @@ object Presets {
      */
     fun next(percent: Int): Int = LEVELS.firstOrNull { it > percent } ?: LEVELS.first()
 
-    /**
-     * The next STEP to set, chosen among the steps this stream can actually reach.
-     *
-     * Found 25.8.2026 by driving the cycle through the real index round-trip: a stream with a
-     * very coarse range GOT STUCK ON ONE LEVEL, and every press looked like it worked. On a
-     * two-step stream, 25% and 50% both land on the same step, that step reads back as one
-     * percentage, and `next()` on that percentage returns the level we are already at — for
-     * ever.
-     *
-     * Cycling on percentages assumed the stream could represent them. Cycling on the steps
-     * themselves cannot make that mistake: the stops are computed from the stream's own range
-     * and de-duplicated, so every press moves to a different step. **Every press changes
-     * something, which is the only promise a toggle has to keep.**
-     *
-     * A guard for "the presets collapse to a single step" was written here and then removed:
-     * checked exhaustively over ranges 1 to 4096, it never happens, because 25% of any range
-     * always rounds below 100% of it. Unreachable code that looks defensive is worse than none
-     * — it is a branch nobody can test and everybody trusts.
-     *
-     * His phone reports 15 and 16 and was never affected. This is a hole found by looking, not
-     * a bug reported.
-     */
-    fun nextIndex(currentIndex: Int, max: Int): Int {
-        if (max <= 0) return 0
-        val stops = stops(max)
-        return stops.firstOrNull { it > currentIndex } ?: stops.first()
-    }
 
     /** The steps this stream can actually reach, de-duplicated and in order. */
     fun stops(max: Int): List<Int> {
