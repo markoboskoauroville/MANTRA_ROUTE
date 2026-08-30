@@ -387,3 +387,58 @@ class ElevatorDirectionTest {
     }
 }
 
+
+/**
+ * The colour schemes. Measured, not admired.
+ */
+class SchemeTest {
+
+    @Test
+    fun `there are ten and their names are distinct`() {
+        assertEquals(10, Schemes.ALL.size)
+        assertEquals(10, Schemes.names.toSet().size)
+    }
+
+    @Test
+    fun `every scheme clears the 4 point 5 contrast floor on every pairing that is drawn`() {
+        // The whole reason the schemes are measured: a palette can look considered and still be
+        // unreadable, and nothing in a build says so.
+        Schemes.ALL.forEach { s ->
+            val worst = Schemes.worstContrast(s)
+            assertTrue("${s.name} worst pairing is $worst", worst >= 4.5)
+        }
+    }
+
+    @Test
+    fun `body text clears the stricter 7 point 0 floor against the page`() {
+        Schemes.ALL.forEach { s ->
+            val ink = Schemes.contrast(s.ink, s.ground)
+            assertTrue("${s.name} ink on ground is $ink", ink >= 7.0)
+        }
+    }
+
+    @Test
+    fun `the contrast arithmetic is right at the two ends it can be checked against`() {
+        // Black on white is 21 by definition; a colour against itself is 1. If these are wrong
+        // every other number in this class is decoration.
+        assertEquals(21.0, Schemes.contrast(0xFF000000.toInt(), 0xFFFFFFFF.toInt()), 0.01)
+        assertEquals(1.0, Schemes.contrast(0xFF123456.toInt(), 0xFF123456.toInt()), 0.001)
+    }
+
+    @Test
+    fun `the first scheme is the original palette, unchanged`() {
+        // Anyone who liked it before should not be moved off it by an upgrade.
+        val sunrise = Schemes.byIndex(0)
+        assertEquals("Sunrise", sunrise.name)
+        assertEquals(0xFF0B0D10.toInt(), sunrise.ground)
+        assertEquals(0xFFF2DDB4.toInt(), sunrise.ink)
+        assertEquals(0xFFF59E0B.toInt(), sunrise.accent)
+    }
+
+    @Test
+    fun `an out of range index is clamped rather than throwing`() {
+        // The index comes from storage, which an older or newer build may have written.
+        assertEquals(Schemes.ALL.first(), Schemes.byIndex(-3))
+        assertEquals(Schemes.ALL.last(), Schemes.byIndex(99))
+    }
+}

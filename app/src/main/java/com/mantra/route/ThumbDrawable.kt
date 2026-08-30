@@ -20,7 +20,11 @@ import android.graphics.drawable.Drawable
  * Written as a Drawable rather than a View because a SeekBar's thumb is a Drawable; wrapping a
  * TextView would have meant reimplementing the SeekBar.
  */
-class ThumbDrawable(private val sizePx: Int) : Drawable() {
+class ThumbDrawable(
+    private val sizePx: Int,
+    fillColour: Int,
+    textColour: Int,
+) : Drawable() {
 
     /** The text inside the circle. Set on every progress change. */
     var label: String = ""
@@ -32,12 +36,12 @@ class ThumbDrawable(private val sizePx: Int) : Drawable() {
         }
 
     private val circle = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFF59E0B.toInt()
+        color = fillColour
         style = Paint.Style.FILL
     }
 
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF12161E.toInt()
+        color = textColour
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         textAlign = Paint.Align.CENTER
     }

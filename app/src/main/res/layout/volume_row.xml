@@ -51,8 +51,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:max="100"
-            android:progressDrawable="@drawable/slider_track"
-            android:splitTrack="false"
+                android:splitTrack="false"
             android:thumbOffset="0dp" />
 
         <TextView
@@ -60,7 +59,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="top|start"
-            android:background="@drawable/bubble_bg"
             android:gravity="center"
             android:minWidth="84dp"
             android:paddingStart="16dp"

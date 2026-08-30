@@ -1280,3 +1280,52 @@ crops it. Back to 92dp of content per row, which fits with room to spare on ever
 
 **A floating thing should float. Giving it a seat costs that seat on every row, for ever,
 whether or not anything is in it.**
+
+---
+
+## v37 — ten colour schemes, chosen by swatch
+
+All ten are the ORIGINAL's structure in a different key, not ten free inventions: a near-black
+ground, a warm ink, one accent carrying every "in force" state, a surface for buttons and empty
+track, and a muted tone for secondary text. **Sunrise is byte-for-byte the palette that was
+already there** — a test pins its three main colours, so an upgrade cannot move anyone off what
+they already liked.
+
+### Measured, not admired
+
+`Schemes.contrast` is real WCAG arithmetic and `worstContrast` reports the weakest pairing that
+is actually drawn. Every scheme clears 4.5 on every drawn pairing and 7.0 for body text:
+
+    Sunrise 7.48   Ember 5.16   Moss 7.57   Indigo 6.51   Rose 6.61
+    Ice     7.38   Plum  6.37   Ochre 6.92  Teal   7.29   Ash  7.07
+
+Only pairings that MEET are checked. Measuring every colour against every other would fail
+schemes for combinations that never appear together, and the temptation would be to flatten the
+palette until the arithmetic passed — losing the character without gaining a reader.
+
+The arithmetic itself is checked at its two known ends: black on white is 21, a colour against
+itself is 1. Without that the rest of the numbers are decoration. Sabotage: darkening one
+scheme's ink turned exactly the two contrast tests red.
+
+### The colours had to leave XML
+
+An XML `@color` is fixed at build time, so the track and bubble backgrounds could never follow a
+scheme. `Theme` builds them as `GradientDrawable`s instead. The LayerDrawable ids matter:
+a SeekBar looks its progress layer up by `android.R.id.progress`, and without the ids it draws
+the empty bar and never fills.
+
+### Two details in the picker
+
+Each swatch is painted in **its own** scheme, not the current one — a row of swatches sharing
+the selected palette tells you nothing about what you are choosing. And the main screen rebuilds
+on resume if the scheme changed, because settings sits on top of it and would otherwise show the
+old colours until the process restarted.
+
+**Red stays out of every scheme.** A fault must not be recoloured into invisibility.
+
+### Not themed
+
+Quick Settings tiles. The system tints a tile icon itself, black or white by state, and ignores
+what the app draws.
+
+TEST 1: 47 green.

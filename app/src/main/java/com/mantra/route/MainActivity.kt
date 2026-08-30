@@ -14,7 +14,6 @@ import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 
@@ -29,6 +28,7 @@ import androidx.core.view.WindowInsetsCompat
 class MainActivity : AppCompatActivity() {
 
     private lateinit var router: Router
+    private lateinit var scheme: Scheme
     private lateinit var volumeRows: LinearLayout
 
     /** Stream, its name label, its slider, and the thumb that carries the number. */
@@ -63,6 +63,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         router = Router(this)
+        scheme = Theme.current(this)
 
         // Android 15 made edge-to-edge mandatory for targetSdk 35+; without consuming the
         // insets this draws behind the clock and behind the navigation buttons.
@@ -79,6 +80,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         volumeRows = findViewById(R.id.volume_rows)
+        root.setBackgroundColor(scheme.ground)
+        findViewById<ImageView>(R.id.settings_button).setColorFilter(scheme.ink)
         findViewById<ImageView>(R.id.settings_button).setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
             startActivity(Intent(this, SettingsActivity::class.java))
@@ -88,6 +91,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // The scheme is chosen on the settings screen, which sits on top of this one. Rebuild
+        // if it changed rather than waiting for the process to restart.
+        if (scheme != Theme.current(this)) {
+            scheme = Theme.current(this)
+            findViewById<View>(R.id.root_scroll).setBackgroundColor(scheme.ground)
+            findViewById<ImageView>(R.id.settings_button).setColorFilter(scheme.ink)
+            buildVolumeRows()
+        }
         contentResolver.registerContentObserver(Settings.System.CONTENT_URI, true, volumeWatcher)
         refreshVolumes()
     }
@@ -109,14 +120,21 @@ class MainActivity : AppCompatActivity() {
             )
             val label = view.findViewById<TextView>(R.id.volume_label)
             val bar = view.findViewById<SeekBar>(R.id.volume_bar)
-            view.findViewById<ImageView>(R.id.volume_glyph).setImageResource(glyphFor(stream.id))
+            view.findViewById<ImageView>(R.id.volume_glyph).apply {
+                setImageResource(glyphFor(stream.id))
+                setColorFilter(scheme.ink)
+            }
 
             val thumbPx = TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP, 56f, resources.displayMetrics,
             ).toInt()
-            val thumb = ThumbDrawable(thumbPx)
+            val thumb = ThumbDrawable(thumbPx, scheme.accent, scheme.ground)
             bar.thumb = thumb
+            bar.progressDrawable = Theme.track(this, scheme)
+            label.setTextColor(scheme.ink)
             val bubble = view.findViewById<TextView>(R.id.volume_bubble)
+            bubble.background = Theme.rounded(this, scheme.accent, 14f)
+            bubble.setTextColor(scheme.ground)
 
             bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(b: SeekBar, p: Int, fromUser: Boolean) {
@@ -154,7 +172,7 @@ class MainActivity : AppCompatActivity() {
                     refreshVolumes()
                     if (outcome is Router.Outcome.Refused) {
                         label.text = outcome.why
-                        label.setTextColor(color(R.color.fault))
+                        label.setTextColor(FAULT)
                     }
 
                     // The tiles cannot see this happen. Tell them.
@@ -172,9 +190,7 @@ class MainActivity : AppCompatActivity() {
             val index = router.volumeIndex(row.stream.id)
             val percent = Volume.percentFor(index, max)
             row.label.text = Volume.label(row.stream.label, max)
-            row.label.setTextColor(
-                color(if (Volume.isLow(index, max)) R.color.fault else R.color.sand)
-            )
+            row.label.setTextColor(if (Volume.isLow(index, max)) FAULT else scheme.ink)
             row.bar.isEnabled = max > 0
             row.bar.progress = percent
             row.thumb.label = if (max <= 0) "--" else percent.toString()
@@ -213,5 +229,8 @@ class MainActivity : AppCompatActivity() {
         bubble.translationY = -(bubble.height + gap)
     }
 
-    private fun color(id: Int) = ContextCompat.getColor(this, id)
+    private companion object {
+        /** Red is not part of any scheme: a fault must not be recoloured into invisibility. */
+        const val FAULT = 0xFFEF4444.toInt()
+    }
 }

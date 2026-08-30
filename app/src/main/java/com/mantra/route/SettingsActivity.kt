@@ -9,10 +9,11 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.HapticFeedbackConstants
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 
@@ -33,10 +34,12 @@ class SettingsActivity : AppCompatActivity() {
 
     private lateinit var dndButton: TextView
     private lateinit var copyButton: TextView
+    private lateinit var scheme: Scheme
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
+        scheme = Theme.current(this)
 
         val root = findViewById<View>(R.id.settings_root)
         val basePadding = root.paddingTop
@@ -53,6 +56,8 @@ class SettingsActivity : AppCompatActivity() {
         dndButton = findViewById(R.id.dnd_button)
         copyButton = findViewById(R.id.copy_button)
         findViewById<TextView>(R.id.version).text = "v" + BuildConfig.VERSION_NAME
+        buildSwatches()
+        paintScheme()
 
         // There was no way out of this screen except the system back gesture, which is not an
         // affordance — nothing on screen said it existed.
@@ -92,7 +97,7 @@ class SettingsActivity : AppCompatActivity() {
         // Read on every resume: both are granted by leaving this screen and coming back, so a
         // value read once at launch would be stale exactly when it mattered.
         dndButton.text = dndLabel()
-        dndButton.setTextColor(color(if (dndGranted()) R.color.amber else R.color.sand))
+        dndButton.setTextColor(if (dndGranted()) scheme.accent else scheme.ink)
     }
 
     private fun dndGranted() =
@@ -109,14 +114,61 @@ class SettingsActivity : AppCompatActivity() {
             (t.cause ?: t).javaClass.simpleName + ": " + (t.message ?: "refused")
         }
         button.text = Feedback.resultLabel(result)
-        button.setTextColor(color(R.color.amber))
+        button.setTextColor(scheme.accent)
         button.postDelayed({
             button.text = resting()
-            button.setTextColor(color(R.color.sand))
+            button.setTextColor(scheme.ink)
         }, Feedback.HOLD_MS)
     }
 
-    private fun color(id: Int) = ContextCompat.getColor(this, id)
+    /**
+     * Ten swatches, five to a row.
+     *
+     * Each one is painted in its OWN scheme rather than the current one — a row of swatches
+     * that all share the selected palette tells you nothing about what you are choosing. The
+     * selected swatch is marked by a ring in its own ink, so the mark is legible whichever
+     * scheme is showing.
+     */
+    private fun buildSwatches() {
+        val rows = listOf<LinearLayout>(findViewById(R.id.swatches_a), findViewById(R.id.swatches_b))
+        rows.forEach { it.removeAllViews() }
+        Schemes.ALL.forEachIndexed { index, s ->
+            val row = rows[index / 5]
+            val swatch = TextView(this)
+            swatch.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
+                .apply { marginStart = if (index % 5 == 0) 0 else Theme.dp(this@SettingsActivity, 8f) }
+            swatch.gravity = android.view.Gravity.CENTER
+            swatch.text = s.name.take(2)
+            swatch.textSize = 13f
+            swatch.setTextColor(s.ink)
+            swatch.contentDescription = s.name
+            swatch.background = Theme.rounded(this, s.ground, 10f).apply {
+                setStroke(
+                    Theme.dp(this@SettingsActivity, if (index == Theme.currentIndex(this@SettingsActivity)) 4f else 1f),
+                    if (index == Theme.currentIndex(this@SettingsActivity)) s.accent else s.surface,
+                )
+            }
+            swatch.setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                Theme.choose(this, index)
+                scheme = Theme.current(this)
+                buildSwatches()
+                paintScheme()
+            }
+            row.addView(swatch)
+        }
+    }
+
+    /** Repaint this screen in the chosen scheme, without recreating the activity. */
+    private fun paintScheme() {
+        findViewById<View>(R.id.settings_root).setBackgroundColor(scheme.ground)
+        findViewById<ImageView>(R.id.back_button).setColorFilter(scheme.ink)
+        findViewById<TextView>(R.id.version).setTextColor(scheme.muted)
+        listOf(dndButton, copyButton).forEach {
+            it.background = Theme.rounded(this, scheme.surface)
+            it.setTextColor(scheme.ink)
+        }
+    }
 
     private fun report(): String {
         val router = Router(this)
